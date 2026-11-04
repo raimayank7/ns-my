@@ -198,6 +198,14 @@
       if (c.ok && c.state && st && !st.value) st.value = c.state;
     }
     if (g) { g.addEventListener('input', gstHint); gstHint(); }
+    if (g && NS.gstFetchButton) NS.gstFetchButton(g, function (d) {
+      ['name', 'addr', 'city', 'pin', 'state'].forEach(function (k) { var el = f.elements[k]; if (el && d[k]) el.value = d[k]; });
+      if (s === 'biz' && d.reg && f.elements.reg) f.elements.reg.value = d.reg;
+      if (s === 'party' && d.reg) r.reg = d.reg;
+      r.gst = { legal: d.legal || '', trade: d.trade || '', status: d.status || '', type: d.type || '', since: d.since || '', checked: d.checked };
+      gstHint();
+      if (f.requestSubmit) f.requestSubmit(); else $('[type=submit]', f).click();
+    });
     $$('[data-imgin]', f).forEach(function (inp) {
       inp.addEventListener('change', function () {
         var file = inp.files[0], k = inp.getAttribute('data-imgin');
