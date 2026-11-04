@@ -171,7 +171,24 @@
     'ev.wop': 'For a supply without IGST (LUT or bond), set GST % to 0 on every item.',
     'ev.old': 'This invoice is more than 30 days old. Businesses with turnover of ₹10 crore or more can no longer register it.',
     'ev.dist': 'Distance must be a whole number from 0 to 4000 km.', 'ev.veh': 'The vehicle number looks wrong. Write it without spaces, for example PB10AB1234.',
-    'ev.tid': 'A transporter ID has 15 characters.', 'ev.small': 'This bill is ₹50,000 or less. An e-way bill is usually not needed below that, unless your state or the goods need one.'
+    'ev.tid': 'A transporter ID has 15 characters.', 'ev.small': 'This bill is ₹50,000 or less. An e-way bill is usually not needed below that, unless your state or the goods need one.',
+
+    /* quotation and estimate (quotation.niveshsahayak.in) */
+    'doc.quote': 'quotation', 'docs.quote': 'quotations', 'Doc.quote': 'Quotation', 'doc.estimate': 'estimate',
+    'k.quote': 'Quotation', 'k.estimate': 'Estimate',
+    'kh.quote': 'A firm price, promised until the validity date.', 'kh.estimate': 'Your best guess of the cost. The final bill may differ.',
+    'l.withgst': 'Show GST on this document', 'h.withgst': 'Untick if you are not GST registered or are in the composition scheme: then you quote one price without tax.',
+    'h.qno': 'Up to 16 letters, numbers, / or -. Quotations and estimates each have their own series.',
+    'l.valid': 'Valid until', 'h.valid': 'The last date on which these prices are promised.', 'l.qref': 'Enquiry reference', 'lg.qto': 'Customer',
+    'ph.qterms': 'For example: Valid for 15 days. 30% advance with order. Delivery in 10 days. GST as applicable.',
+    'l.qstat': 'Status', 'qs.open': 'Waiting for reply', 'qs.acc': 'Accepted', 'qs.dec': 'Not accepted', 'qs.inv': 'Invoice made',
+    'v.qtax': 'To show GST you need your GSTIN. If you are not registered, untick “Show GST on this document”.',
+    'c.qdup': 'A {doc} with number {no} is already saved for this business in this financial year. Save anyway?',
+    'b.toinv': 'Make invoice', 'conv.done': 'Filled in from {doc} {no}. Check the details, then save the invoice.', 'conv.none': 'That quotation could not be found in the saved data of this browser.',
+    'nav.quote': 'Quotation', 'nav.qformats': 'Quotation formats', 'nav.qvs': 'Quotation or estimate?',
+    'f.qmake': 'Make a quotation', 'f.qmaker': 'Quotation and estimate maker', 'f.qformats': 'Quotation formats by business', 'f.qvs': 'Quotation, estimate or proforma?',
+    'f.qguides': 'Quotation guides', 'f.qfmt': 'What to put on a quotation', 'f.qterms': 'Terms and conditions', 'f.qgst': 'GST on a quotation', 'f.qinv': 'From quotation to invoice',
+    'hub.quote': 'Quotation and estimate maker that becomes an invoice in one click'
   };
 
   var packs = { en: EN }, cur = 'en';

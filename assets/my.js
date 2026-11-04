@@ -8,7 +8,8 @@
   var UNITS = ['Nos', 'Pcs', 'Kg', 'Gm', 'Ltr', 'Ml', 'Mtr', 'Sq ft', 'Box', 'Pack', 'Set', 'Pair', 'Dozen', 'Bag', 'Ton', 'Hrs', 'Days', 'Month', 'Job'];
   var RATES = [0, 0.25, 3, 5, 12, 18, 28, 40];
   var ACCENTS = ['#0B3B5B', '#1D4ED8', '#047857', '#B45309', '#9D174D', '#334155'];
-  var BILLING = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? 'http://localhost:8861/' : 'https://billing.niveshsahayak.in/';
+  var LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  var BILLING = LOCAL ? 'http://localhost:8861/' : 'https://billing.niveshsahayak.in/', QUOTE = LOCAL ? 'http://localhost:8863/' : 'https://quotation.niveshsahayak.in/';
 
   /* field: [key, label key, kind, extra]; kinds: text, area, state, gstin, sel, num, img, unit, gst, ltr */
   var FORM = {
@@ -50,7 +51,7 @@
     });
   }
   function title(s, r) {
-    if (s === 'doc') return t('doc.' + (r.type || 'invoice')).replace(/^./, function (c) { return c.toUpperCase(); }) + ' ' + (r.no || '');
+    if (s === 'doc') return t(r.kind === 'estimate' ? 'doc.estimate' : 'doc.' + (r.type || 'invoice')).replace(/^./, function (c) { return c.toUpperCase(); }) + ' ' + (r.no || '');
     return r[NAMEKEY[s]] || t('my.noname');
   }
   function sub(s, r) {
@@ -102,7 +103,8 @@
         return '<li class="' + (s[1] ? 'ok' : '') + '"><span class="tick" aria-hidden="true">' + (s[1] ? '✓' : '') + '</span><a href="' + s[3] + '"' + (ext ? ' target="_blank" rel="noopener"' : '') + '>' + esc(t(s[2])) + '</a>' +
           (s[1] ? '<span class="sr">' + esc(t('hub.done')) + '</span>' : '') + '</li>';
       }).join('') + '</ol></div>' +
-      '<div class="card"><h3>' + esc(t('hub.tools')) + '</h3><div class="cards"><a href="' + BILLING + '" target="_blank" rel="noopener"><b>' + esc(t('nav.billing')) + '</b><span>' + esc(t('hub.billing')) + '</span></a></div>' +
+      '<div class="card"><h3>' + esc(t('hub.tools')) + '</h3><div class="cards"><a href="' + BILLING + '" target="_blank" rel="noopener"><b>' + esc(t('nav.billing')) + '</b><span>' + esc(t('hub.billing')) + '</span></a>' +
+        '<a href="' + QUOTE + '" target="_blank" rel="noopener"><b>' + esc(t('nav.quote')) + '</b><span>' + esc(t('hub.quote')) + '</span></a></div>' +
       '<p class="soft">' + esc(t('hub.toolsp')) + '</p></div>';
   }
 
@@ -330,7 +332,7 @@
     if (s === 'doc') {
       var hd = ['Type', 'Number', 'Date', 'Customer', 'Customer GSTIN', 'Business', 'Total', 'Status'];
       var rows = cache.doc.slice().sort(function (a, b) { return (a.date || '').localeCompare(b.date || ''); }).map(function (d) {
-        return [d.type, d.no, d.date, d.buyer && d.buyer.name, d.buyer && d.buyer.gstin, d.seller && d.seller.name, NS.r2(d.total || 0), d.status === 'paid' ? 'Paid' : 'Not paid'];
+        return [d.type, d.no, d.date, d.buyer && d.buyer.name, d.buyer && d.buyer.gstin, d.seller && d.seller.name, NS.r2(d.total || 0), d.type === 'quote' ? { open: 'Waiting for reply', acc: 'Accepted', dec: 'Not accepted', inv: 'Invoice made' }[d.status] || '' : d.status === 'paid' ? 'Paid' : 'Not paid'];
       });
       return download('documents-' + NS.today() + '.csv', [hd].concat(rows).map(function (r) { return r.map(csvCell).join(','); }).join('\r\n'));
     }
