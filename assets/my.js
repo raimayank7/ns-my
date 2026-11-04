@@ -9,7 +9,16 @@
   var RATES = [0, 0.25, 3, 5, 12, 18, 28, 40];
   var ACCENTS = ['#0B3B5B', '#1D4ED8', '#047857', '#B45309', '#9D174D', '#334155'];
   var LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  var BILLING = LOCAL ? 'http://localhost:8861/' : 'https://billing.niveshsahayak.in/', QUOTE = LOCAL ? 'http://localhost:8863/' : 'https://quotation.niveshsahayak.in/';
+  var BILLING = LOCAL ? 'http://localhost:8861/' : 'https://billing.niveshsahayak.in/';
+  /* every document tool [site, host, name key, line key, local port] (build.py TOOLS); which site makes which document type */
+  var TOOLS = (window.NS_CFG && NS_CFG.tools) || [['billing', 'billing.niveshsahayak.in', 'nav.billing', 'hub.billing', 8861]];
+  var SITEOF = { invoice: 'billing', quote: 'quotation', proforma: 'proforma', so: 'sales-order', challan: 'challan', po: 'purchase-order', note: 'credit-note', cashmemo: 'cash-memo',
+    receipt: 'receipt', voucher: 'voucher', rent: 'rent-receipt', salary: 'salary-slip', petty: 'petty-cash' };
+  function toolUrl(site) { var x = TOOLS.filter(function (x) { return x[0] === site; })[0] || TOOLS[0]; return LOCAL ? 'http://localhost:' + x[4] + '/' : 'https://' + x[1] + '/'; }
+  /* number prefixes of the other documents (Settings); quotation and credit note have two series each */
+  var PREFIXES = [['quote', 'quote', 'QT', 'k.quote'], ['quote', 'estimate', 'EST', 'k.estimate'], ['proforma', '', 'PI', 'Doc.proforma'], ['so', '', 'SO', 'Doc.so'], ['challan', '', 'DC', 'Doc.challan'],
+    ['po', '', 'PO', 'Doc.po'], ['note', 'credit', 'CN', 'k.credit'], ['note', 'debit', 'DN', 'k.debit'], ['cashmemo', '', 'CM', 'Doc.cashmemo'], ['receipt', '', 'RCT', 'Doc.receipt'],
+    ['voucher', '', 'PV', 'Doc.voucher'], ['rent', '', 'RR', 'Doc.rent'], ['salary', '', 'SAL', 'Doc.salary'], ['petty', '', 'PCB', 'Doc.petty']];
 
   /* field: [key, label key, kind, extra]; kinds: text, area, state, gstin, sel, num, img, unit, gst, ltr */
   var FORM = {
@@ -51,12 +60,14 @@
     });
   }
   function title(s, r) {
-    if (s === 'doc') return t(r.kind === 'estimate' ? 'doc.estimate' : 'doc.' + (r.type || 'invoice')).replace(/^./, function (c) { return c.toUpperCase(); }) + ' ' + (r.no || '');
+    if (s === 'doc') return t(r.kind === 'estimate' ? 'doc.estimate' : r.type === 'note' ? 'k.' + r.kind : 'doc.' + (r.type || 'invoice')).replace(/^./, function (c) { return c.toUpperCase(); }) + ' ' + (r.no || '');
     return r[NAMEKEY[s]] || t('my.noname');
   }
   function sub(s, r) {
     if (s === 'doc') return NS.fmtDate(r.date) + ' · ' + esc(r.buyer && r.buyer.name || t('h.nocust')) + ' · <b>' + NS.money(r.total || 0) + '</b> · ' + esc(r.seller && r.seller.name || '') +
-      ' <span class="pill' + (r.status === 'paid' ? ' ok' : '') + '">' + esc(t(r.status === 'paid' ? 'h.paidp' : 'h.unpaidp')) + '</span>';
+      (!r.type || r.type === 'invoice' || r.type === 'cashmemo' ? ' <span class="pill' + (r.status === 'paid' ? ' ok' : '') + '">' + esc(t(r.status === 'paid' ? 'h.paidp' : 'h.unpaidp')) + '</span>'
+        : r.status ? ' <span class="pill' + (/^(acc|inv|sdone|prec|nadj|nref)$/.test(r.status) ? ' ok' : '') + '">' + esc(t('qs.' + r.status)) + '</span>' : '') +
+      ' <a href="' + toolUrl(SITEOF[r.type || 'invoice']) + '" target="_blank" rel="noopener">' + esc(t(TOOLS.filter(function (x) { return x[0] === SITEOF[r.type || 'invoice']; }).map(function (x) { return x[2]; })[0] || 'nav.billing')) + ' ›</a>';
     if (s === 'item') return [r.code && esc(r.code), r.hsn && 'HSN ' + esc(r.hsn), r.rate !== '' && r.rate != null && NS.money(NS.num(r.rate)) + (r.unit ? ' / ' + esc(r.unit) : ''), r.gst !== '' && r.gst != null && 'GST ' + esc(r.gst) + '%', r.kind === 'service' && esc(t('hub.k.service'))].filter(Boolean).join(' · ');
     var bits = [r.gstin && '<span class="mono">' + esc(r.gstin) + '</span>', r.state && esc(NS.stateName(r.state)), r.phone && esc(r.phone)];
     if (s === 'party' && r.role && r.role !== 'customer') bits.unshift(esc(t('hub.r.' + r.role)));
@@ -103,8 +114,8 @@
         return '<li class="' + (s[1] ? 'ok' : '') + '"><span class="tick" aria-hidden="true">' + (s[1] ? '✓' : '') + '</span><a href="' + s[3] + '"' + (ext ? ' target="_blank" rel="noopener"' : '') + '>' + esc(t(s[2])) + '</a>' +
           (s[1] ? '<span class="sr">' + esc(t('hub.done')) + '</span>' : '') + '</li>';
       }).join('') + '</ol></div>' +
-      '<div class="card"><h3>' + esc(t('hub.tools')) + '</h3><div class="cards"><a href="' + BILLING + '" target="_blank" rel="noopener"><b>' + esc(t('nav.billing')) + '</b><span>' + esc(t('hub.billing')) + '</span></a>' +
-        '<a href="' + QUOTE + '" target="_blank" rel="noopener"><b>' + esc(t('nav.quote')) + '</b><span>' + esc(t('hub.quote')) + '</span></a></div>' +
+      '<div class="card"><h3>' + esc(t('hub.tools')) + '</h3><div class="cards">' + TOOLS.map(function (x) {
+        return '<a href="' + toolUrl(x[0]) + '" target="_blank" rel="noopener"><b>' + esc(t(x[2])) + '</b><span>' + esc(t(x[3])) + '</span></a>'; }).join('') + '</div>' +
       '<p class="soft">' + esc(t('hub.toolsp')) + '</p></div>';
   }
 
@@ -257,6 +268,10 @@
         '<div class="f wide"><label class="chk"><input type="checkbox" name="fy"' + (c.fy === false ? '' : ' checked') + '> ' + esc(t('hub.fy')) + '</label></div>' +
         '<div class="f wide"><span class="lbl">' + esc(t('hub.next')) + '</span><b class="mono preview-no" data-no-pv></b><small class="hint">' + esc(t('hub.h.num')) + '</small></div>' +
       '</div></fieldset>' +
+      '<fieldset class="card"><legend>' + esc(t('hub.g.pre')) + '</legend><p class="hint">' + esc(t('hub.h.pre')) + '</p><div class="fg">' + PREFIXES.map(function (x) {
+        var c2 = S[x[0]] || {}, v = x[1] ? (c2.prefixes || {})[x[1]] : c2.prefix, id = 'st-p-' + x[0] + (x[1] ? '-' + x[1] : '');
+        return '<div class="f"><label for="' + id + '">' + esc(t(x[3])) + '</label><input id="' + id + '" data-pre="' + x[0] + '|' + x[1] + '" dir="ltr" maxlength="8" autocapitalize="characters" value="' + esc(v != null ? v : x[2]) + '"></div>'; }).join('') +
+      '</div></fieldset>' +
       '<fieldset class="card"><legend>' + esc(t('hub.g.new')) + '</legend><div class="fg">' +
         '<div class="f"><label for="st-kind">' + esc(t('l.type')) + '</label><select id="st-kind" name="kind">' + ['tax', 'supply', 'plain'].map(function (k) { return '<option value="' + k + '"' + sel(k, c.kind || 'tax') + '>' + esc(t('k.' + k)) + '</option>'; }).join('') + '</select></div>' +
         '<div class="f"><label for="st-gst">' + esc(t('hub.defgst')) + '</label><select id="st-gst" name="gst">' + RATES.map(function (g) { return '<option value="' + g + '"' + sel(g, gst) + '>' + g + '%</option>'; }).join('') + '</select></div>' +
@@ -288,11 +303,15 @@
       S.remindDays = +E.remindDays.value;
       S.invoice = { prefix: E.prefix.value.trim(), digits: +E.digits.value, fy: E.fy.checked, kind: E.kind.value, gst: +E.gst.value, unit: E.unit.value.trim() || 'Nos',
         round: E.round.checked, accent: acc, notes: E.notes.value.trim(), terms: E.terms.value.trim() };
+      $$('[data-pre]', f).forEach(function (inp) {
+        var k = inp.getAttribute('data-pre').split('|'), v = inp.value.trim().toUpperCase().replace(/[^A-Z0-9\/\-]/g, ''), c2 = S[k[0]] = S[k[0]] || {};
+        if (k[1]) { c2.prefixes = c2.prefixes || {}; c2.prefixes[k[1]] = v; } else c2.prefix = v;
+      });
       saveSettings().then(function () { NS.toast(t('hub.setsaved')); counts(); });
     });
     $('[data-reset]', f).addEventListener('click', function () {
       if (!confirm(t('hub.c.reset'))) return;
-      delete S.invoice; S.remindDays = 7;
+      delete S.invoice; PREFIXES.forEach(function (x) { delete S[x[0]]; }); S.remindDays = 7;
       saveSettings().then(function () { NS.toast(t('hub.setsaved')); show('settings'); });
     });
   }
