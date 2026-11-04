@@ -135,3 +135,4 @@ details.more .fg{margin-top:8px}
   .lines thead{display:table-header-group}
   .lines tr{break-inside:avoid}
 }
+.hub-link{margin:0 0 8px;font-size:.9rem;text-align:end}

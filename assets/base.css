@@ -42,6 +42,7 @@ h1,h2,h3,h4{font-family:var(--font-head);line-height:1.25;letter-spacing:-.01em}
 @media (max-width:720px){.hd nav a.hide-sm{display:none}.brand small{display:none}}
 @media (max-width:380px){.brand b{font-size:.9rem}.brand svg{width:30px;height:30px}.hd .wrap{gap:8px}}
 .lang-pick{width:auto;max-width:150px;min-height:40px;padding:6px 28px 6px 10px;font-size:.88rem;border-radius:10px}
+@media (max-width:400px){.lang-pick{max-width:86px!important;padding-right:22px}}
 @media (max-width:520px){.lang-pick{max-width:104px}.brand small{display:none}.brand b{font-size:.92rem}.brand b .soft{display:block;font-size:.78rem;font-weight:700}.hd nav{gap:4px}}
 .guide-en{background:var(--surface2);border-radius:10px;padding:8px 14px;margin-top:12px;font-size:.92rem;color:var(--soft)}
 /* right-to-left languages (Urdu, Kashmiri, Sindhi): the layout mirrors; codes, numbers and the printed sheet stay left-to-right */
@@ -49,7 +50,7 @@ h1,h2,h3,h4{font-family:var(--font-head);line-height:1.25;letter-spacing:-.01em}
 [dir=rtl] .callout{border-left:0;border-right:4px solid var(--amber)}
 [dir=rtl] input[dir=ltr]{text-align:right}
 /* pages still in English stay left-to-right inside a right-to-left screen */
-[dir=rtl] .hero:not([dir]),[dir=rtl] .prose:not([dir]){direction:ltr;text-align:left}
+html[data-page-lang=en][dir=rtl] .hero,html[data-page-lang=en][dir=rtl] .prose{direction:ltr;text-align:left}
 :lang(ur) body,:lang(ks) body{line-height:2}
 
 /* buttons and fields */

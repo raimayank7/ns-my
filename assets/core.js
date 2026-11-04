@@ -162,14 +162,14 @@
   };
   function hideReminder() { var r = NS.$('#ns-remind'); if (r) r.hidden = true; }
   NS.checkReminder = function () {
-    return Promise.all([NSStore.meta('lastBackup'), NSStore.list('doc')]).then(function (r) {
-      var last = r[0] || 0, docs = r[1].length;
-      if (!docs) return;
+    return Promise.all([NSStore.meta('lastBackup'), NSStore.list('doc'), NSStore.meta('settings')]).then(function (r) {
+      var last = r[0] || 0, docs = r[1].length, every = r[2] && r[2].remindDays != null ? +r[2].remindDays : 7;
+      if (!docs || !every) return;
       /* no backup yet: wait until there is something worth losing (3 documents, or work older than a day) */
       var oldest = Math.min.apply(null, r[1].map(function (d) { return d.created || Date.now(); }));
       if (!last && docs < 3 && Date.now() - oldest < 864e5) return;
       var days = (Date.now() - last) / 864e5;
-      if (days < 7) return;
+      if (days < every) return;
       var bar = NS.$('#ns-remind');
       if (!bar) return;
       NS.$('[data-remind-text]', bar).textContent = last ? NS.t('rm.ago', { n: Math.floor(days) }) : NS.t('rm.none', { n: docs });

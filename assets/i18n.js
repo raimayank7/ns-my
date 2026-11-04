@@ -91,7 +91,7 @@
     'c.del': 'Delete {doc} {no}? This cannot be undone (unless you have a backup file).', 'deleted': 'Deleted.',
     'b.new': 'New {doc}', 'b.hist': 'Saved {docs}', 'b.save': 'Save', 'b.print': 'Print / PDF', 'b.share': 'Share', 'tab.edit': 'Edit', 'tab.preview': 'Preview',
 
-    'my.title': 'My business data', 'my.intro': 'Everything the Nivesh Sahayak document tools have saved on this device: your businesses, customers and suppliers, items and services, and documents. It stays in this browser. Nothing is sent to us.',
+    'my.title': 'Settings and saved data', 'my.intro': 'One place to set up every Nivesh Sahayak document tool: your businesses, customers and suppliers, items and services, numbering and defaults. It stays in this browser. Nothing is sent to us.',
     'my.auto': 'Auto-save and storage', 'my.t.biz': 'My businesses', 'my.t.party': 'Customers and suppliers', 'my.t.item': 'Items and services', 'my.t.doc': 'Documents',
     'my.search': 'Search', 'my.ph': 'Type a name, number or code', 'my.edit': 'Edit', 'my.savech': 'Save changes', 'my.cancel': 'Cancel', 'my.noname': '(no name)',
     'my.empty': 'Nothing saved here yet. It fills up as you use the document tools.', 'my.vault': 'Shared by every Nivesh Sahayak document tool in this browser.', 'my.local': 'Kept in this browser.',
@@ -99,7 +99,39 @@
     'my.wipe.b': 'Delete everything on this device', 'my.wipe.c1': 'Delete ALL saved businesses, customers, items and documents on this device? Save a backup file first if you may need them.',
     'my.wipe.c2': 'Type DELETE to confirm.', 'my.wiped': 'Everything was deleted from this device.', 'my.c.del': 'Delete “{name}”? This cannot be undone without a backup file.', 'my.saved': 'Saved.',
     'my.f.name': 'Name', 'my.f.addr': 'Address', 'my.f.state': 'State code', 'my.f.gstin': 'GSTIN', 'my.f.phone': 'Phone', 'my.f.email': 'Email', 'my.f.bank': 'Bank', 'my.f.acc': 'Account no.', 'my.f.ifsc': 'IFSC', 'my.f.upi': 'UPI ID',
-    'my.f.desc': 'Description', 'my.f.hsn': 'HSN/SAC', 'my.f.unit': 'Unit', 'my.f.rate': 'Rate', 'my.f.gst': 'GST %'
+    'my.f.desc': 'Description', 'my.f.hsn': 'HSN/SAC', 'my.f.unit': 'Unit', 'my.f.rate': 'Rate', 'my.f.gst': 'GST %',
+
+    /* Configuration Hub (my.niveshsahayak.in) */
+    'my.t.settings': 'Settings', 'hub.home': 'Overview', 'hub.backup': 'Backup and other devices', 'hub.link': 'Saved businesses, customers, items and settings',
+    'hub.start': 'Get set up', 'hub.done': 'done', 'hub.s1': 'Add your business (name, GSTIN, bank, logo)', 'hub.s2': 'Add your customers and suppliers', 'hub.s3': 'Add the items and services you sell',
+    'hub.s4': 'Choose invoice numbering and defaults', 'hub.s5': 'Make your first invoice', 'hub.s6': 'Save a backup file',
+    'hub.tools': 'Tools that use this data', 'hub.billing': 'GST tax invoice, bill of supply and plain invoice maker', 'hub.toolsp': 'Everything you add here shows up as a suggestion in every Nivesh Sahayak document tool in this browser. Nothing fills in by itself: you pick it.',
+    'hub.add.biz': 'Add a business', 'hub.add.party': 'Add a customer or supplier', 'hub.add.item': 'Add an item or service',
+    'hub.edit.biz': 'Edit business', 'hub.edit.party': 'Edit customer or supplier', 'hub.edit.item': 'Edit item or service', 'hub.newdoc': 'Make a new invoice',
+    'hub.p.biz': 'The businesses you make documents for. Their name, address, GSTIN, bank details, logo and signature print on your documents.',
+    'hub.p.party': 'The people and firms you bill or buy from. Type a name in any tool and pick it to fill the address, state and GSTIN.',
+    'hub.p.item': 'Goods and services with their HSN/SAC code, unit, rate and GST. Pick one in any tool to fill the line.',
+    'hub.p.doc': 'Every document saved in this browser. Open, copy or mark one paid from the tool that made it.',
+    'hub.empty.biz': 'No business saved yet. Add yours to start.', 'hub.empty.party': 'No customers or suppliers yet. Add them one by one or import a CSV file from Excel.',
+    'hub.empty.item': 'No items or services yet. Add them one by one or import a CSV file from Excel.', 'hub.empty.doc': 'No documents saved yet.',
+    'hub.imp': 'Import CSV', 'hub.exp': 'Export CSV', 'hub.tpl': 'Download a blank CSV template',
+    'hub.imp.empty': 'This file has no rows to import.', 'hub.imp.nohead': 'This file has no “{col}” column. Start from the blank template.',
+    'hub.imp.done': 'Imported: {a} new, {u} updated.', 'hub.imp.bad': 'Rows skipped because of a wrong GSTIN: {rows}.',
+    'hub.role': 'Type', 'hub.r.customer': 'Customer', 'hub.r.supplier': 'Supplier', 'hub.r.both': 'Customer and supplier', 'hub.h.ship': 'Only if goods usually go to a different address.',
+    'hub.f.iname': 'Item or service name', 'hub.f.code': 'Item code (optional)', 'hub.k.goods': 'Goods', 'hub.k.service': 'Service',
+    'hub.rmimg': 'Remove picture', 'hub.save': 'Save', 'hub.saveadd': 'Save and add another',
+    'hub.gst.typing': '{n} more characters', 'hub.gst.ok': 'Looks right: state {state}, PAN {pan}.',
+    'hub.v.name': 'Please type a name.', 'hub.v.dup': '“{name}” is already saved. Edit that one instead.', 'hub.v.ifsc': 'An IFSC has 11 characters, like SBIN0001234.',
+    'hub.default': 'Default', 'hub.makedef': 'Make default',
+    'hub.p.settings': 'These settings are used by every Nivesh Sahayak document tool in this browser when you start a new document.',
+    'hub.g.gen': 'General', 'hub.defbiz': 'Default business', 'hub.nodef': 'None (start empty)', 'hub.h.defbiz': 'A new document starts with this business filled in.',
+    'hub.remind': 'Remind me to save a backup', 'hub.every': 'Every {n} days', 'hub.never': 'Never', 'hub.h.lang': 'Change it from the language menu at the top. Every tool follows it.',
+    'hub.g.num': 'Invoice numbering', 'hub.prefix': 'Prefix', 'hub.digits': 'Digits in the serial number', 'hub.fy': 'Add the financial year (26-27)', 'hub.next': 'The first invoice of a year will be',
+    'hub.h.num': 'Each business gets its own series, and the serial starts again from 1 every financial year (1 April). GST allows up to 16 characters: letters, numbers, / and -.',
+    'hub.g.new': 'New invoice defaults', 'hub.defgst': 'GST rate for a new line', 'hub.defunit': 'Unit for a new line', 'hub.h.new': 'You can still change all of these on each document.',
+    'hub.saveset': 'Save settings', 'hub.reset': 'Back to standard settings', 'hub.c.reset': 'Go back to the standard numbering and defaults? Your saved data is not touched.', 'hub.setsaved': 'Settings saved.',
+    'hub.p.backup': 'Your data lives only in this browser. Save a backup file now and then, and use it to move to another computer or phone.',
+    'hub.used': 'Space used in this browser: {mb} MB.', 'hub.move': 'Moving to another computer? See {link}.'
   };
 
   var packs = { en: EN }, cur = 'en';
@@ -162,10 +194,17 @@
   NS.initLang = function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-lang-pick]'), function (s) {
       s.innerHTML = NS.LANGS.map(function (l) { return '<option value="' + l[0] + '" lang="' + l[0] + '" title="' + l[2] + '">' + l[1] + '</option>'; }).join('');
-      s.addEventListener('change', function () { NS.setLang(s.value); });
+      s.addEventListener('change', function () {
+        var code = s.value;
+        /* open the same page in the chosen language when it exists; a translated page goes back to English otherwise */
+        var to = ALT[code] || (pageLang !== 'en' ? ALT.en : null);
+        NS.setLang(code).then(function () { if (to && to !== location.pathname) location.href = to; });
+      });
     });
+    var ALT = window.NS_ALT || {}, pageLang = document.documentElement.getAttribute('data-page-lang') || 'en';
     var saved; try { saved = localStorage.getItem('ns-lang'); } catch (e) {}
-    var first = NS.setLang(saved || guess(), true);
+    if (pageLang === 'en' && saved && saved !== 'en' && ALT[saved] && ALT[saved] !== location.pathname) { location.replace(ALT[saved]); return Promise.resolve(); }
+    var first = NS.setLang(pageLang !== 'en' ? pageLang : (saved || guess()), true);
     /* the language chosen on any Nivesh Sahayak tool is shared through the data home */
     if (!saved && window.NSStore) NSStore.ready().then(function () { return NSStore.meta('lang'); }).then(function (l) { if (l && l !== cur) NS.setLang(l, true); }).catch(function () {});
     return first;
