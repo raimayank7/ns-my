@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /vault.html
+
+Sitemap: https://my.niveshsahayak.in/sitemap.xml
