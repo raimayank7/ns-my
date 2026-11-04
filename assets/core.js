@@ -30,14 +30,14 @@
   NS.gstinCheck = function (g) {
     g = String(g || '').toUpperCase().replace(/\s/g, '');
     if (!g) return { ok: true, empty: true };
-    if (!/^[0-9]{2}[A-Z0-9]{10}[0-9A-Z]Z[0-9A-Z]$/.test(g) && !/^[0-9]{2}[A-Z0-9]{13}$/.test(g)) return { ok: false, msg: 'A GSTIN has 15 letters and numbers, for example 03ABCDE1234F1Z5.' };
+    if (!/^[0-9]{2}[A-Z0-9]{10}[0-9A-Z]Z[0-9A-Z]$/.test(g) && !/^[0-9]{2}[A-Z0-9]{13}$/.test(g)) return { ok: false, msg: NS.t('gst.len') };
     var C = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', sum = 0;
     for (var i = 0; i < 14; i++) {
       var v = C.indexOf(g[i]) * (i % 2 ? 2 : 1);
       sum += Math.floor(v / 36) + (v % 36);
     }
     var chk = C[(36 - (sum % 36)) % 36];
-    if (chk !== g[14]) return { ok: false, msg: 'This GSTIN’s last character doesn’t match. Please check it for a typing mistake.' };
+    if (chk !== g[14]) return { ok: false, msg: NS.t('gst.chk') };
     var st = g.slice(0, 2);
     return { ok: true, state: NS.stateName(st) ? st : '', pan: g.slice(2, 12) };
   };
@@ -93,8 +93,8 @@
     var root = document.documentElement;
     if (v === 'light' || v === 'dark') root.setAttribute('data-theme', v); else root.removeAttribute('data-theme');
     NS.$$('[data-theme-btn]').forEach(function (b) {
-      b.setAttribute('aria-label', 'Colour theme: ' + (v || 'system'));
-      b.title = 'Colour theme: ' + (v || 'same as device');
+      b.setAttribute('aria-label', NS.t ? NS.t('theme') : 'Colour theme');
+      b.title = NS.t ? NS.t('theme') : 'Colour theme';
     });
   }
   NS.initTheme = function () {
@@ -150,15 +150,15 @@
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
       return NSStore.meta('lastBackup', Date.now());
-    }).then(function () { NS.toast('Backup file saved. Keep it somewhere safe (Google Drive, email or WhatsApp to yourself).'); hideReminder(); });
+    }).then(function () { NS.toast(NS.t('bk.saved')); hideReminder(); });
   };
   NS.restoreFromFile = function (file) {
     return file.text().then(function (txt) {
       var b = JSON.parse(txt);
-      if (!b || b.app !== 'Nivesh Sahayak' || !b.data) throw new Error('This is not a Nivesh Sahayak backup file.');
+      if (!b || b.app !== 'Nivesh Sahayak' || !b.data) throw new Error(NS.t('bk.notours'));
       return NSStore.importAll(b.data, false);
-    }).then(function (n) { NS.toast(n ? n + ' records brought back. Newer records you already had were kept.' : 'Nothing new in that file: you already have everything in it.'); return n; },
-      function (e) { NS.toast(e.message || 'That file could not be read.', 'bad'); throw e; });
+    }).then(function (n) { NS.toast(n ? NS.t('bk.restored', { n: n }) : NS.t('bk.nothing')); return n; },
+      function (e) { NS.toast(e instanceof SyntaxError ? NS.t('bk.unread') : (e.message || NS.t('bk.unread')), 'bad'); throw e; });
   };
   function hideReminder() { var r = NS.$('#ns-remind'); if (r) r.hidden = true; }
   NS.checkReminder = function () {
@@ -172,9 +172,7 @@
       if (days < 7) return;
       var bar = NS.$('#ns-remind');
       if (!bar) return;
-      NS.$('[data-remind-text]', bar).textContent = last
-        ? 'Your last backup was ' + Math.floor(days) + ' days ago. Save a backup file so your work is safe if this browser is cleared.'
-        : 'You have ' + docs + ' saved document' + (docs > 1 ? 's' : '') + ' and no backup yet. Save a backup file so your work is safe if this browser is cleared.';
+      NS.$('[data-remind-text]', bar).textContent = last ? NS.t('rm.ago', { n: Math.floor(days) }) : NS.t('rm.none', { n: docs });
       bar.hidden = false;
     }).catch(function () {});
   };
@@ -197,10 +195,10 @@
   NS.folderSupported = function () { return 'showDirectoryPicker' in window; };
   NS.folderPick = function () {
     return window.showDirectoryPicker({ id: 'ns-backup', mode: 'readwrite', startIn: 'documents' }).then(function (h) {
-      return folderSet(h).then(function () { return NS.folderWrite(true); }).then(function () { NS.toast('Auto-save is on: every save also updates the backup file in "' + h.name + '".'); return h.name; });
+      return folderSet(h).then(function () { return NS.folderWrite(true); }).then(function () { NS.toast(NS.t('af.on', { name: h.name })); return h.name; });
     });
   };
-  NS.folderOff = function () { return folderSet(null).then(function () { NS.toast('Auto-save to folder is off.'); }); };
+  NS.folderOff = function () { return folderSet(null).then(function () { NS.toast(NS.t('af.off')); }); };
   NS.folderStatus = function () {
     if (!NS.folderSupported()) return Promise.resolve({ supported: false });
     return folderGet().then(function (h) {
@@ -232,27 +230,27 @@
     var dlg = NS.$('#ns-mydata');
     if (!dlg) return;
     var body = NS.$('[data-mydata-body]', dlg);
-    body.innerHTML = '<p class="soft">Loading your data…</p>';
+    body.innerHTML = '<p class="soft">' + NS.esc(NS.t('md.loading')) + '</p>';
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
     Promise.all(['biz', 'party', 'item', 'doc'].map(function (s) { return NSStore.list(s); })).then(function (r) {
       return Promise.all([NS.folderStatus(), NSStore.meta('lastBackup')]).then(function (x) { return [r, x[0], x[1]]; });
     }).then(function (all) {
       var r = all[0], f = all[1], last = all[2];
       var shared = NSStore.mode() === 'vault';
+      var T = NS.t, E = NS.esc;
       body.innerHTML =
-        '<ul class="counts"><li><b>' + r[0].length + '</b> my business' + (r[0].length === 1 ? '' : 'es') + '</li><li><b>' + r[1].length + '</b> customers and suppliers</li><li><b>' + r[2].length + '</b> items and services</li><li><b>' + r[3].length + '</b> saved documents</li></ul>' +
-        '<p class="note">' + (shared
-          ? 'Your data is kept in this browser on this device, in one place shared by every Nivesh Sahayak document site. Nothing is sent to us.'
-          : 'Your data is kept in this browser on this device. Nothing is sent to us. (The shared data home could not be reached just now, so this site is keeping it for now and will move it there automatically.)') + '</p>' +
-        '<p class="note">Last backup: <b>' + (last ? new Date(last).toLocaleString('en-IN') : 'never') + '</b></p>' +
-        '<div class="btns"><button type="button" class="btn primary" data-act="backup">Save a backup file</button>' +
-        '<label class="btn">Restore from a backup file<input type="file" accept=".json,application/json" data-act="restore" hidden></label></div>' +
-        (f.supported ? '<h3>Auto-save to a folder (computer only)</h3><p class="note">' + (f.on
-          ? 'On: every save updates <b>' + NS.esc(BACKUP_NAME) + '.json</b> in the folder <b>' + NS.esc(f.name) + '</b>' + (f.allowed ? '.' : ', but the browser needs your OK again after a restart.') + ' Pick a OneDrive or Google Drive folder and the file is in the cloud too.'
-          : 'Pick a folder once (a OneDrive or Google Drive folder is best) and every save keeps a backup file there automatically.') + '</p>' +
-          '<div class="btns">' + (f.on ? (f.allowed ? '' : '<button type="button" class="btn primary" data-act="folder-allow">Allow auto-save again</button>') + '<button type="button" class="btn" data-act="folder-off">Turn auto-save off</button>' : '<button type="button" class="btn" data-act="folder-pick">Choose a folder</button>') + '</div>' : '') +
-        '<p class="note">See and edit everything on <a href="https://my.niveshsahayak.in/" target="_blank" rel="noopener">my.niveshsahayak.in</a>.</p>';
-    }).catch(function () { body.innerHTML = '<p class="note bad">Your data could not be opened. Please reload the page.</p>'; });
+        '<ul class="counts"><li><b>' + r[0].length + '</b> ' + E(T('md.biz')) + '</li><li><b>' + r[1].length + '</b> ' + E(T('md.party')) + '</li><li><b>' + r[2].length + '</b> ' + E(T('md.item')) + '</li><li><b>' + r[3].length + '</b> ' + E(T('md.doc')) + '</li></ul>' +
+        '<p class="note">' + E(T(shared ? 'md.shared' : 'md.local')) + '</p>' +
+        '<p class="note">' + E(T('md.last')) + ' <b>' + (last ? new Date(last).toLocaleString('en-IN') : E(T('md.never'))) + '</b></p>' +
+        '<div class="btns"><button type="button" class="btn primary" data-act="backup">' + E(T('md.save')) + '</button>' +
+        '<label class="btn">' + E(T('md.restore')) + '<input type="file" accept=".json,application/json" data-act="restore" hidden></label></div>' +
+        '<p class="note">' + E(T('md.move')) + '</p>' +
+        (f.supported ? '<h3>' + E(T('md.autot')) + '</h3><p class="note">' + (f.on
+          ? T('md.auton', { file: '<b>' + E(BACKUP_NAME) + '.json</b>', name: '<b>' + E(f.name) + '</b>' }) + (f.allowed ? '' : ' ' + E(T('md.autoask')))
+          : E(T('md.autooff'))) + '</p>' +
+          '<div class="btns">' + (f.on ? (f.allowed ? '' : '<button type="button" class="btn primary" data-act="folder-allow">' + E(T('md.allow')) + '</button>') + '<button type="button" class="btn" data-act="folder-off">' + E(T('md.turnoff')) + '</button>' : '<button type="button" class="btn" data-act="folder-pick">' + E(T('md.choose')) + '</button>') + '</div>' : '') +
+        '<p class="note">' + T('md.seeall', { link: '<a href="https://my.niveshsahayak.in/" target="_blank" rel="noopener">my.niveshsahayak.in</a>' }) + '</p>';
+    }).catch(function () { body.innerHTML = '<p class="note bad">' + NS.esc(NS.t('md.err')) + '</p>'; });
   };
   document.addEventListener('click', function (e) {
     var t = e.target.closest && e.target.closest('[data-act]');
@@ -291,7 +289,7 @@
       var img = p.imgs && p.imgs.length ? p.imgs[Math.floor(Math.random() * p.imgs.length)] : '';
       slot.innerHTML = '<a class="sponsor" href="' + NS.esc(p.href) + '" target="_blank" rel="sponsored noopener">' +
         (img ? '<img src="' + NS.esc(img) + '" alt="" loading="lazy" width="96" height="96">' : '') +
-        '<span><small>Sponsored</small><b>' + NS.esc(p.title || '') + '</b>' + (p.line ? '<span>' + NS.esc(p.line) + '</span>' : '') +
+        '<span><small>' + NS.esc(NS.t('sp.label')) + '</small><b>' + NS.esc(p.title || '') + '</b>' + (p.line ? '<span>' + NS.esc(p.line) + '</span>' : '') +
         (p.cta ? '<em>' + NS.esc(p.cta) + ' →</em>' : '') + '</span></a>';
       slot.hidden = false;
     }).catch(function () {});
@@ -299,6 +297,7 @@
 
   /* ---------- page start ---------- */
   NS.start = function () {
+    if (NS.initLang) NS.initLang();
     NS.initTheme();
     var y = NS.$('[data-year]'); if (y) y.textContent = new Date().getFullYear();
     NS.sponsor();

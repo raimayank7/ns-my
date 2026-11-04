@@ -87,7 +87,7 @@
       frame.title = 'Nivesh Sahayak data home';
       frame.setAttribute('aria-hidden', 'true');
       frame.tabIndex = -1;
-      frame.style.cssText = 'position:absolute;width:1px;height:1px;border:0;left:-9999px;top:0;visibility:hidden';
+      frame.style.cssText = 'position:fixed;width:1px;height:1px;border:0;left:0;top:0;opacity:0;pointer-events:none;clip-path:inset(50%)';
       function onMsg(e) {
         if (e.origin !== VAULT_ORIGIN || !e.data || e.data.ns !== 'vault' || !('ready' in e.data)) return;
         window.removeEventListener('message', onMsg);
