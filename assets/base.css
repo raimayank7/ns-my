@@ -31,8 +31,8 @@ h1,h2,h3,h4{font-family:var(--font-head);line-height:1.25;letter-spacing:-.01em}
 .hd{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
 .hd .wrap{display:flex;align-items:center;gap:12px;min-height:60px}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);min-width:0}
-.brand .mk{height:44px;width:auto;flex:none}
-@media (max-width:520px){.brand .mk{height:34px}}
+.brand .mk{height:58px;width:auto;flex:none}
+@media (max-width:520px){.brand .mk{height:42px}}
 .brand .mk-d{display:none}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]) .brand .mk-l{display:none}:root:not([data-theme=light]) .brand .mk-d{display:block}}
 :root[data-theme=dark] .brand .mk-l{display:none}:root[data-theme=dark] .brand .mk-d{display:block}
@@ -44,7 +44,7 @@ h1,h2,h3,h4{font-family:var(--font-head);line-height:1.25;letter-spacing:-.01em}
 .icon-btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;width:40px;height:40px;display:grid;place-items:center;cursor:pointer;flex:none}
 .icon-btn svg{width:20px;height:20px}
 @media (max-width:720px){.hd nav a.hide-sm{display:none}.brand small{display:none}}
-@media (max-width:380px){.brand b{font-size:.9rem}.brand .mk{height:24px}.hd .wrap{gap:8px}}
+@media (max-width:380px){.brand b{font-size:.9rem}.brand .mk{height:28px}.hd .wrap{gap:8px}}
 .lang-pick{width:auto;max-width:150px;min-height:40px;padding:6px 28px 6px 10px;font-size:.88rem;border-radius:10px}
 @media (max-width:400px){.lang-pick{max-width:86px!important;padding-right:22px}}
 /* smallest phones: brand name must not run under the language picker */
