@@ -14,7 +14,10 @@
   var TOOLS = (window.NS_CFG && NS_CFG.tools) || [['billing', 'billing.niveshsahayak.in', 'nav.billing', 'hub.billing', 8861]];
   var SITEOF = { invoice: 'billing', quote: 'quotation', proforma: 'proforma', so: 'sales-order', challan: 'challan', po: 'purchase-order', self: 'self-invoice', note: 'credit-note', cashmemo: 'cash-memo',
     receipt: 'receipt', voucher: 'voucher', rent: 'rent-receipt', salary: 'salary-slip', petty: 'petty-cash' };
-  function toolUrl(site) { var x = TOOLS.filter(function (x) { return x[0] === site; })[0] || TOOLS[0]; return LOCAL ? 'http://localhost:' + x[4] + '/' : 'https://' + x[1] + '/'; }
+  function toolUrl(site) { if (site === 'app') return APP; var x = TOOLS.filter(function (x) { return x[0] === site; })[0] || TOOLS[0]; return LOCAL ? 'http://localhost:' + x[4] + '/' : 'https://' + x[1] + '/'; }
+  /* records made in the Nivesh Sahayak App (purchase bills, expenses, opening balances) open there */
+  var APP = LOCAL ? 'http://localhost:8880/' : 'https://app.niveshsahayak.in/';
+  var APPDOC = { pbill: ['Purchase bill', '#buy'], exp: ['Expense', '#buy'], ob: ['Opening balance', '#money'] };
   /* number prefixes of the other documents (Settings); quotation and credit note have two series each */
   var PREFIXES = [['quote', 'quote', 'QT', 'k.quote'], ['quote', 'estimate', 'EST', 'k.estimate'], ['proforma', '', 'PI', 'Doc.proforma'], ['so', '', 'SO', 'Doc.so'], ['challan', '', 'DC', 'Doc.challan'],
     ['po', '', 'PO', 'Doc.po'], ['self', '', 'SI', 'Doc.self'], ['note', 'credit', 'CN', 'k.credit'], ['note', 'debit', 'DN', 'k.debit'], ['cashmemo', '', 'CM', 'Doc.cashmemo'], ['receipt', '', 'RCT', 'Doc.receipt'],
@@ -62,6 +65,7 @@
     });
   }
   function title(s, r) {
+    if (s === 'doc' && APPDOC[r.type]) return (r.type === 'pbill' && r.kind === 'return' ? 'Purchase return' : APPDOC[r.type][0]) + ' ' + (r.no || '');
     if (s === 'doc') return t(r.kind === 'estimate' ? 'doc.estimate' : r.type === 'note' ? 'k.' + r.kind : 'doc.' + (r.type || 'invoice')).replace(/^./, function (c) { return c.toUpperCase(); }) + ' ' + (r.no || '');
     return r[NAMEKEY[s]] || t('my.noname');
   }
@@ -69,7 +73,8 @@
     if (s === 'doc') return NS.fmtDate(r.date) + ' · ' + esc(r.buyer && r.buyer.name || t('h.nocust')) + ' · <b>' + NS.money(r.total || 0) + '</b> · ' + esc(r.seller && r.seller.name || '') +
       (!r.type || r.type === 'invoice' || r.type === 'cashmemo' ? ' <span class="pill' + (r.status === 'paid' ? ' ok' : '') + '">' + esc(t(r.status === 'paid' ? 'h.paidp' : 'h.unpaidp')) + '</span>'
         : r.status ? ' <span class="pill' + (/^(acc|inv|sdone|prec|nadj|nref)$/.test(r.status) ? ' ok' : '') + '">' + esc(t('qs.' + r.status)) + '</span>' : '') +
-      ' <a href="' + toolUrl(SITEOF[r.type || 'invoice']) + '" target="_blank" rel="noopener">' + esc(t(TOOLS.filter(function (x) { return x[0] === SITEOF[r.type || 'invoice']; }).map(function (x) { return x[2]; })[0] || 'nav.billing')) + ' ›</a>';
+      (APPDOC[r.type] ? ' <a href="' + APP + APPDOC[r.type][1] + '" target="_blank" rel="noopener">Nivesh Sahayak App ›</a>' :
+      ' <a href="' + toolUrl(SITEOF[r.type || 'invoice']) + '" target="_blank" rel="noopener">' + esc(t(TOOLS.filter(function (x) { return x[0] === SITEOF[r.type || 'invoice']; }).map(function (x) { return x[2]; })[0] || 'nav.billing')) + ' ›</a>');
     if (s === 'item') return [r.code && esc(r.code), r.hsn && 'HSN ' + esc(r.hsn), r.rate !== '' && r.rate != null && NS.money(NS.num(r.rate)) + (r.unit ? ' / ' + esc(r.unit) : ''), r.gst !== '' && r.gst != null && 'GST ' + esc(r.gst) + '%', r.kind === 'service' && esc(t('hub.k.service'))].filter(Boolean).join(' · ');
     var bits = [r.gstin && '<span class="mono">' + esc(r.gstin) + '</span>', r.state && esc(NS.stateName(r.state)), r.phone && esc(r.phone)];
     if (s === 'party' && r.role && r.role !== 'customer') bits.unshift(esc(t('hub.r.' + r.role)));
