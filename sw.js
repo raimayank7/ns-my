@@ -1,5 +1,5 @@
-const CACHE = 'ns-my-78357c5a24';
-const SHELL = ["/", "/assets/base.css?v=06560bfa88", "/assets/doc.css?v=5b386b6154", "/assets/i18n.js?v=7945fe336b", "/assets/store.js?v=eb98e624a1", "/assets/core.js?v=41851ad4ee", "/assets/my.js?v=12134db2f0", "/vault.html"];
+const CACHE = 'ns-my-f8b28bda53';
+const SHELL = ["/", "/assets/base.css?v=06560bfa88", "/assets/doc.css?v=5b386b6154", "/assets/i18n.js?v=746ccf993b", "/assets/store.js?v=eb98e624a1", "/assets/core.js?v=41851ad4ee", "/assets/my.js?v=12134db2f0", "/vault.html"];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(n => n.startsWith('ns-') && n !== CACHE).map(n => caches.delete(n)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
