@@ -16,7 +16,13 @@
       r.onupgradeneeded = function () {
         STORES.forEach(function (s) { if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s, { keyPath: 'id' }); });
       };
-      r.onsuccess = function () { res(r.result); };
+      /* another tab still holds the older database (opened before an update): the upgrade waits until it closes; say so */
+      r.onblocked = function () { window.parent.postMessage({ ns: 'vault', blocked: true }, '*'); };
+      r.onsuccess = function () {
+        var d = r.result;
+        d.onversionchange = function () { d.close(); dbp = null; };   /* a newer page needs to upgrade: let it */
+        res(d);
+      };
       r.onerror = function () { rej(r.error); };
     });
     return dbp;

@@ -21,7 +21,19 @@
   /* number prefixes of the other documents (Settings); quotation and credit note have two series each */
   var PREFIXES = [['quote', 'quote', 'QT', 'k.quote'], ['quote', 'estimate', 'EST', 'k.estimate'], ['proforma', '', 'PI', 'Doc.proforma'], ['so', '', 'SO', 'Doc.so'], ['challan', '', 'DC', 'Doc.challan'],
     ['po', '', 'PO', 'Doc.po'], ['self', '', 'SI', 'Doc.self'], ['note', 'credit', 'CN', 'k.credit'], ['note', 'debit', 'DN', 'k.debit'], ['cashmemo', '', 'CM', 'Doc.cashmemo'], ['receipt', '', 'RCT', 'Doc.receipt'],
-    ['voucher', '', 'PV', 'Doc.voucher'], ['rent', '', 'RR', 'Doc.rent'], ['salary', '', 'SAL', 'Doc.salary'], ['petty', '', 'PCB', 'Doc.petty']];
+    ['voucher', '', 'PV', 'Doc.voucher'], ['rent', '', 'RR', 'Doc.rent'], ['salary', '', 'SAL', 'Doc.salary'], ['petty', '', 'PCB', 'Doc.petty'],
+    /* shop and trade sites (kit.js): fixed digits (5th item), always with the financial year */
+    ['exp', '', 'EXP', 'Doc.exp'], ['pos', '', 'POS', 'nav.pos', 4], ['pharma', '', 'PH', 'nav.pharmacy', 4], ['resto', '', 'RB', 'nav.restaurant', 4], ['lr', '', 'LR', 'nav.bilty', 4],
+    ['job', '', 'JC', 'nav.jobcard', 4], ['rabill', '', 'RA', 'nav.contractorbill', 3], ['fee', '', 'FR', 'nav.feereceipt', 4]];
+  /* Settings: one small card per document, grouped: [group key, [[type, maker site, name key], ...]]; a card shows that type's PREFIXES rows */
+  var DOCCARDS = [
+    ['hub.grp.sell', [['quote', 'quotation', 'nav.quote'], ['proforma', 'proforma', 'Doc.proforma'], ['so', 'sales-order', 'Doc.so'], ['challan', 'challan', 'Doc.challan'],
+      ['cashmemo', 'cash-memo', 'Doc.cashmemo'], ['note', 'credit-note', 'nav.note'], ['exp', 'export-invoice', 'Doc.exp']]],
+    ['hub.grp.buy', [['po', 'purchase-order', 'Doc.po'], ['self', 'self-invoice', 'Doc.self']]],
+    ['hub.grp.money', [['receipt', 'receipt', 'Doc.receipt'], ['voucher', 'voucher', 'Doc.voucher'], ['petty', 'petty-cash', 'Doc.petty'], ['rent', 'rent-receipt', 'Doc.rent'], ['salary', 'salary-slip', 'Doc.salary']]],
+    ['hub.grp.trade', [['pos', 'pos', 'nav.pos'], ['pharma', 'pharmacy', 'nav.pharmacy'], ['resto', 'restaurant', 'nav.restaurant'], ['lr', 'bilty', 'nav.bilty'], ['job', 'job-card', 'nav.jobcard'],
+      ['rabill', 'contractor-bill', 'nav.contractorbill'], ['fee', 'fee-receipt', 'nav.feereceipt']]]];
+  function siteUrl(site) { return TOOLS.some(function (x) { return x[0] === site; }) ? toolUrl(site) : 'https://' + site + '.niveshsahayak.in/'; }
 
   /* field: [key, label key, kind, extra]; kinds: text, area, state, gstin, sel, num, img, unit, gst, ltr */
   var FORM = {
@@ -368,17 +380,14 @@
           return '<option value="' + d + '"' + sel(d, S.remindDays != null ? S.remindDays : 7) + '>' + esc(d ? t('hub.every', { n: d }) : t('hub.never')) + '</option>'; }).join('') + '</select></div>' +
         '<div class="f"><span class="lbl">' + esc(t('lang')) + '</span><small class="hint">' + esc(t('hub.h.lang')) + '</small></div>' +
       '</div></fieldset>' +
-      '<fieldset class="card"><legend>' + esc(t('hub.g.num')) + '</legend><div class="fg">' +
+      '<fieldset class="card"><legend>' + esc(t('hub.g.inv')) + '</legend><p class="dc-top"><a class="dc-open" href="' + siteUrl('billing') + '" target="_blank" rel="noopener">' + esc(t('hub.openmk')) + ' ›</a></p>' +
+        '<h3 class="dc-sub">' + esc(t('hub.g.num')) + '</h3><div class="fg">' +
         '<div class="f"><label for="st-pre">' + esc(t('hub.prefix')) + '</label><input id="st-pre" name="prefix" dir="ltr" maxlength="8" value="' + esc(c.prefix != null ? c.prefix : 'INV') + '" autocapitalize="characters"></div>' +
         '<div class="f"><label for="st-dig">' + esc(t('hub.digits')) + '</label><select id="st-dig" name="digits">' + [1, 2, 3, 4, 5, 6].map(function (d) { return '<option' + sel(d, c.digits || 3) + '>' + d + '</option>'; }).join('') + '</select></div>' +
         '<div class="f wide"><label class="chk"><input type="checkbox" name="fy"' + (c.fy === false ? '' : ' checked') + '> ' + esc(t('hub.fy')) + '</label></div>' +
         '<div class="f wide"><span class="lbl">' + esc(t('hub.next')) + '</span><b class="mono preview-no" data-no-pv></b><small class="hint">' + esc(t('hub.h.num')) + '</small></div>' +
-      '</div></fieldset>' +
-      '<fieldset class="card"><legend>' + esc(t('hub.g.pre')) + '</legend><p class="hint">' + esc(t('hub.h.pre')) + '</p><div class="fg">' + PREFIXES.map(function (x) {
-        var c2 = S[x[0]] || {}, v = x[1] ? (c2.prefixes || {})[x[1]] : c2.prefix, id = 'st-p-' + x[0] + (x[1] ? '-' + x[1] : '');
-        return '<div class="f"><label for="' + id + '">' + esc(t(x[3])) + '</label><input id="' + id + '" data-pre="' + x[0] + '|' + x[1] + '" dir="ltr" maxlength="8" autocapitalize="characters" value="' + esc(v != null ? v : x[2]) + '"></div>'; }).join('') +
-      '</div></fieldset>' +
-      '<fieldset class="card"><legend>' + esc(t('hub.g.new')) + '</legend><div class="fg">' +
+      '</div>' +
+        '<h3 class="dc-sub">' + esc(t('hub.g.new')) + '</h3><div class="fg">' +
         '<div class="f"><label for="st-kind">' + esc(t('l.type')) + '</label><select id="st-kind" name="kind">' + ['tax', 'supply', 'plain'].map(function (k) { return '<option value="' + k + '"' + sel(k, c.kind || 'tax') + '>' + esc(t('k.' + k)) + '</option>'; }).join('') + '</select></div>' +
         '<div class="f"><label for="st-gst">' + esc(t('hub.defgst')) + '</label><select id="st-gst" name="gst">' + RATES.map(function (g) { return '<option value="' + g + '"' + sel(g, gst) + '>' + g + '%</option>'; }).join('') + '</select></div>' +
         '<div class="f"><label for="st-unit">' + esc(t('hub.defunit')) + '</label><input id="st-unit" name="unit" dir="ltr" list="st-units" value="' + esc(c.unit || 'Nos') + '"><datalist id="st-units">' + UNITS.map(function (u) { return '<option value="' + u + '">'; }).join('') + '</datalist></div>' +
@@ -388,6 +397,14 @@
         '<div class="f wide"><label for="st-notes">' + esc(t('l.notes')) + '</label><textarea id="st-notes" name="notes" rows="2" dir="auto" placeholder="' + esc(t('ph.notes')) + '">' + esc(c.notes || '') + '</textarea></div>' +
         '<div class="f wide"><label for="st-terms">' + esc(t('l.terms')) + '</label><textarea id="st-terms" name="terms" rows="3" dir="auto" placeholder="' + esc(t('ph.terms')) + '">' + esc(c.terms || '') + '</textarea><small class="hint">' + esc(t('hub.h.new')) + '</small></div>' +
       '</div></fieldset>' +
+      '<fieldset class="card"><legend>' + esc(t('hub.g.docs')) + '</legend><p class="hint">' + esc(t('hub.h.docs')) + '</p>' + DOCCARDS.map(function (g) {
+        return '<h3 class="dc-sub">' + esc(t(g[0])) + '</h3><div class="dcards">' + g[1].map(function (d) {
+          var rows = PREFIXES.filter(function (x) { return x[0] === d[0]; }), c2 = S[d[0]] || {};
+          return '<div class="dcard"><div class="dc-h"><b>' + esc(t(d[2])) + '</b><a class="dc-open" href="' + siteUrl(d[1]) + '" target="_blank" rel="noopener">' + esc(t('hub.openmk')) + ' ›</a></div>' + rows.map(function (x) {
+            var v = x[1] ? (c2.prefixes || {})[x[1]] : c2.prefix, id = 'st-p-' + x[0] + (x[1] ? '-' + x[1] : '');
+            return '<div class="dc-row"><label for="' + id + '">' + esc(rows.length > 1 ? t(x[3]) : t('hub.pfx')) + '</label><input id="' + id + '" data-pre="' + x[0] + '|' + x[1] + '"' + (x[4] ? ' data-fix="' + x[4] + '"' : '') + ' dir="ltr" maxlength="8" autocapitalize="characters" value="' + esc(v != null ? v : x[2]) + '">' +
+              '<small class="dc-next">' + esc(t('hub.nextno')) + ' <b class="mono" data-pre-pv></b></small></div>'; }).join('') + '</div>'; }).join('') + '</div>'; }).join('') +
+      '</fieldset>' +
       '<fieldset class="card"><legend>' + esc(t('b1.g_safe')) + '</legend><div class="fg">' +
         '<div class="f"><label for="st-who">' + esc(t('b1.who')) + '</label><input id="st-who" name="who" dir="auto" maxlength="40" value="' + esc(S._who) + '"><small class="hint">' + esc(t('b1.h_who')) + '</small></div>' +
         '<div class="f"><label for="st-lock">' + esc(t('b1.lock')) + '</label><input id="st-lock" name="lockBefore" type="date" value="' + esc(S.lockBefore || '') + '"><small class="hint">' + esc(t('b1.h_lock')) + '</small></div>' +
@@ -440,7 +457,12 @@
       var fy = NS.fy(NS.today()), short = fy.slice(2, 4) + '-' + fy.slice(5), pre = f.elements.prefix.value.trim().toUpperCase().replace(/[^A-Z0-9\/\-]/g, '');
       f.elements.prefix.value = pre;
       $('[data-no-pv]', f).textContent = (pre ? pre + '/' : '') + (f.elements.fy.checked ? short + '/' : '') + String(1).padStart(+f.elements.digits.value, '0');
+      $$('[data-pre]', f).forEach(function (inp) {
+        var p2 = inp.value.trim().toUpperCase().replace(/[^A-Z0-9\/\-]/g, ''), fix = +inp.getAttribute('data-fix');
+        $('[data-pre-pv]', inp.parentNode).textContent = (p2 ? p2 + '/' : '') + (fix || f.elements.fy.checked ? short + '/' : '') + String(1).padStart(fix || +f.elements.digits.value, '0');
+      });
     }
+    $$('[data-pre]', f).forEach(function (inp) { inp.addEventListener('input', pv); });
     ['prefix', 'digits', 'fy'].forEach(function (n) { f.elements[n].addEventListener('input', pv); f.elements[n].addEventListener('change', pv); });
     pv();
     $$('[data-acc]', f).forEach(function (b) {
