@@ -25,7 +25,7 @@
   var APPDOC = { pbill: ['Purchase bill', '#buy'], exp: ['Expense', '#buy'], ob: ['Opening balance', '#money'] };
   /* number prefixes of the other documents (Settings); quotation and credit note have two series each */
   var PREFIXES = [['quote', 'quote', 'QT', 'k.quote'], ['quote', 'estimate', 'EST', 'k.estimate'], ['proforma', '', 'PI', 'Doc.proforma'], ['so', '', 'SO', 'Doc.so'], ['challan', '', 'DC', 'Doc.challan'],
-    ['po', '', 'PO', 'Doc.po'], ['self', '', 'SI', 'Doc.self'], ['note', 'credit', 'CN', 'k.credit'], ['note', 'debit', 'DN', 'k.debit'], ['cashmemo', '', 'CM', 'Doc.cashmemo'], ['receipt', '', 'RCT', 'Doc.receipt'],
+    ['po', '', 'PO', 'Doc.po'], ['self', '', 'SI', 'Doc.self'], ['note', 'credit', 'CN', 'k.credit'], ['note', 'creditp', 'PCN', 'k.creditp'], ['note', 'debit', 'DN', 'k.debit'], ['note', 'debitp', 'PDN', 'k.debitp'], ['cashmemo', '', 'CM', 'Doc.cashmemo'], ['receipt', '', 'RCT', 'Doc.receipt'],
     ['voucher', '', 'PV', 'Doc.voucher'], ['rent', '', 'RR', 'Doc.rent'], ['salary', '', 'SAL', 'Doc.salary'], ['petty', '', 'PCB', 'Doc.petty'],
     /* shop and trade sites (kit.js): fixed digits (5th item), always with the financial year */
     ['exp', '', 'EXP', 'Doc.exp'], ['pos', '', 'POS', 'nav.pos', 4], ['pharma', '', 'PH', 'nav.pharmacy', 4], ['resto', '', 'RB', 'nav.restaurant', 4], ['lr', '', 'LR', 'nav.bilty', 4],
@@ -100,7 +100,7 @@
   function sub(s, r) {
     if (s === 'doc') return NS.fmtDate(r.date) + ' · ' + esc(r.buyer && r.buyer.name || (r.type === 'exp' ? r.cat || r.head || '' : t('h.nocust'))) + ' · <b>' + NS.money(r.total || 0) + '</b> · ' + esc(r.seller && r.seller.name || '') +
       (!r.type || r.type === 'invoice' || r.type === 'cashmemo' ? ' <span class="pill' + (r.status === 'paid' ? ' ok' : '') + '">' + esc(t(r.status === 'paid' ? 'h.paidp' : 'h.unpaidp')) + '</span>'
-        : r.status ? ' <span class="pill' + (/^(acc|inv|sdone|prec|nadj|nref)$/.test(r.status) ? ' ok' : '') + '">' + esc(t('qs.' + r.status)) + '</span>' : '') +
+        : r.status ? ' <span class="pill' + (/^(acc|inv|sdone|prec|nadj|nref|nrecv|npaid)$/.test(r.status) ? ' ok' : '') + '">' + esc(t('qs.' + r.status)) + '</span>' : '') +
       (APPDOC[r.type] ? ' <a href="' + APP + APPDOC[r.type][1] + '" target="_blank" rel="noopener">Nivesh Sahayak App ›</a>' :
       KITOF[kitType(r)] ? ' <a href="' + siteUrl(KITOF[kitType(r)][0]) + '?open=' + encodeURIComponent(r.id) + '" target="_blank" rel="noopener">' + esc(t(KITOF[kitType(r)][1])) + ' ›</a>' :
       ' <a href="' + toolUrl(r.type === 'note' && r.kind === 'debit' ? 'debit-note' : SITEOF[r.type || 'invoice']) + '" target="_blank" rel="noopener">' + esc(t(TOOLS.filter(function (x) { return x[0] === (r.type === 'note' && r.kind === 'debit' ? 'debit-note' : SITEOF[r.type || 'invoice']); }).map(function (x) { return x[2]; })[0] || 'nav.billing')) + ' ›</a>');
@@ -604,7 +604,7 @@
       '</div></fieldset>' +
       '<fieldset class="card"><legend>' + esc(t('hub.g.docs')) + '</legend><p class="hint">' + esc(t('hub.h.docs')) + '</p>' + DOCCARDS.map(function (g) {
         return '<h3 class="dc-sub">' + esc(t(g[0])) + '</h3><div class="dcards">' + g[1].map(function (d) {
-          var rows = PREFIXES.filter(function (x) { return x[0] === d[0] && (!d[3] || x[1] === d[3]); }), c2 = S[d[0]] || {};
+          var rows = PREFIXES.filter(function (x) { return x[0] === d[0] && (!d[3] || x[1].indexOf(d[3]) === 0); }), c2 = S[d[0]] || {};
           return '<div class="dcard"><div class="dc-h"><b>' + esc(t(d[2])) + '</b><a class="dc-open" href="' + siteUrl(d[1]) + '" target="_blank" rel="noopener">' + esc(t('hub.openmk')) + ' ›</a></div>' + rows.map(function (x) {
             var v = x[1] ? (c2.prefixes || {})[x[1]] : c2.prefix, id = 'st-p-' + x[0] + (x[1] ? '-' + x[1] : '');
             return '<div class="dc-row"><label for="' + id + '">' + esc(rows.length > 1 ? t(x[3]) : t('hub.pfx')) + '</label><input id="' + id + '" data-pre="' + x[0] + '|' + x[1] + '"' + (x[4] ? ' data-fix="' + x[4] + '"' : '') + ' dir="ltr" maxlength="8" autocapitalize="characters" value="' + esc(v != null ? v : x[2]) + '">' +
