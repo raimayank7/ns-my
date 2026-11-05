@@ -1,5 +1,5 @@
-const CACHE = 'ns-my-a3237b2b58';
-const SHELL = ["/", "/assets/base.css?v=4939645edb", "/assets/doc.css?v=0adb150aec", "/assets/i18n.js?v=ef518606b1", "/assets/store.js?v=eb98e624a1", "/assets/core.js?v=c74e588f6d", "/assets/gstfetch.js?v=77942f1a8e", "/assets/my.js?v=aaf006e63c", "/vault.html"];
+const CACHE = 'ns-my-0db9363dc8';
+const SHELL = ["/", "/assets/base.css?v=95be4dce42", "/assets/doc.css?v=757271abe2", "/assets/i18n.js?v=75d64c1681", "/assets/store.js?v=425a88f908", "/assets/core.js?v=81e1330a72", "/assets/safe.js?v=2dfed74206", "/assets/help.js?v=ddaed68b26", "/assets/books.js?v=c16d2ce560", "/assets/extras.js?v=857c723793", "/assets/gstfetch.js?v=77942f1a8e", "/assets/my.js?v=80dad4352f", "/assets/hubmore.js?v=ea06399aaa", "/assets/safe.css?v=f3b3edd6eb", "/assets/desk.js?v=9a150c505b", "/assets/desk.css?v=30fabdd14c", "/assets/xlsx.js?v=9c9abd01b6", "/assets/tally.js?v=7b3f6fd707", "/assets/acct.js?v=78527f0909", "/vault.html"];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(n => n.startsWith('ns-') && n !== CACHE).map(n => caches.delete(n)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {

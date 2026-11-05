@@ -4,14 +4,15 @@
    The data stays in this browser (IndexedDB). Only niveshsahayak.in pages (and localhost while testing) may ask. */
 (function () {
   'use strict';
-  var STORES = ['biz', 'party', 'item', 'doc', 'meta'];
+  /* bin = recycle bin (deleted records kept 30 days), log = edit history (who/when/what changed; only ever added to) */
+  var STORES = ['biz', 'party', 'item', 'doc', 'meta', 'bin', 'log'];
   var ALLOWED = /^https:\/\/([a-z0-9-]+\.)*niveshsahayak\.in$|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
   var dbp;
 
   function db() {
     if (dbp) return dbp;
     dbp = new Promise(function (res, rej) {
-      var r = indexedDB.open('ns-vault', 1);
+      var r = indexedDB.open('ns-vault', 2);
       r.onupgradeneeded = function () {
         STORES.forEach(function (s) { if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s, { keyPath: 'id' }); });
       };
