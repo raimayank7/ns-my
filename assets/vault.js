@@ -91,6 +91,82 @@
       return navigator.storage.estimate();
     }
   };
+  /* ---------- one auto save for every site ----------
+     The folder is chosen once on my.niveshsahayak.in (core.js keeps the handle in this origin's 'ns-folder' database).
+     This data home is open on every Nivesh Sahayak site (hidden frame), so any change, from any site or the App, marks the
+     data "changed" and the full backup file (same as "Back up everything") is written here a moment later.
+     The browser may ask for its OK again after a restart; a frame can't ask, so it tells the page ('af': 'ask') and the page
+     shows "Auto save paused", which opens my.niveshsahayak.in to allow it. Changes made meanwhile wait ('dirty') and are written
+     as soon as any page of this data home has the OK again. */
+  var AF_FILE = 'nivesh-sahayak-backup.json', AF_SKIP = { lastBackup: 1 }, afT = 0;
+  var afOk = 'showDirectoryPicker' in window;
+  var fdbp;
+  function fdb() {
+    if (fdbp) return fdbp;
+    fdbp = new Promise(function (res, rej) {
+      var r = indexedDB.open('ns-folder', 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore('h'); };
+      r.onsuccess = function () { res(r.result); }; r.onerror = function () { fdbp = null; rej(r.error); };
+    });
+    return fdbp;
+  }
+  function fget(k) { return fdb().then(function (d) { return new Promise(function (res) { var q = d.transaction('h').objectStore('h').get(k); q.onsuccess = function () { res(q.result); }; q.onerror = function () { res(null); }; }); }); }
+  function fput(k, v) { return fdb().then(function (d) { return new Promise(function (res) { var t = d.transaction('h', 'readwrite'); v == null ? t.objectStore('h').delete(k) : t.objectStore('h').put(v, k); t.oncomplete = res; t.onerror = res; }); }); }
+  function afTell(st) { if (window.parent !== window) window.parent.postMessage({ ns: 'vault', af: st }, '*'); }
+  /* 'ok' written, 'ask' needs the browser's OK, 'off' no folder chosen, 'no' this browser can't */
+  function afWrite() {
+    if (!afOk) return Promise.resolve('no');
+    var go = function () {
+      var start = Date.now();
+      return fget('dir').then(function (h) {
+        if (!h) return 'off';
+        return h.queryPermission({ mode: 'readwrite' }).then(function (p) {
+          if (p !== 'granted') return 'ask';
+          return OPS.exportAll().then(function (data) {
+            var b = { app: 'Nivesh Sahayak', kind: 'backup', version: 1, saved: new Date().toISOString(), data: data };
+            return h.getFileHandle(AF_FILE, { create: true }).then(function (fh) { return fh.createWritable(); })
+              .then(function (w) { return w.write(JSON.stringify(b, null, 1)).then(function () { return w.close(); }); });
+          }).then(function () {
+            return tx('meta', 'readwrite', function (s) { s.put({ id: 'lastBackup', v: Date.now(), updated: Date.now() }); });
+          }).then(function () {
+            return fget('dirty').then(function (d) { if (!d || d <= start) return fput('dirty', null); });   /* a change during the write: keep it for the next one */
+          }).then(function () { return fput('last', Date.now()); }).then(function () { return 'ok'; });
+        });
+      }).catch(function () { return 'ask'; });
+    };
+    /* several tabs each have a data home frame: one writes at a time */
+    return navigator.locks && navigator.locks.request ? navigator.locks.request('ns-autosave', go) : go();
+  }
+  function afSoon(ms) {
+    clearTimeout(afT);
+    afT = setTimeout(function () { afWrite().then(function (st) { if (st === 'ok' || st === 'ask') afTell(st); }); }, ms == null ? 1500 : ms);
+  }
+  function changed(store, value) {
+    if (!afOk) return;
+    if (store === 'meta' && value && [].concat(value).every(function (v) { return v && AF_SKIP[v.id]; })) return;
+    fput('dirty', Date.now()).then(function () { afSoon(); }, function () {});
+  }
+  ['put', 'del', 'clear'].forEach(function (op) {
+    var f = OPS[op];
+    OPS[op] = function (a) { return f(a).then(function (r) { changed(a.store, a.value); return r; }); };
+  });
+  OPS.afStatus = function () {
+    if (!afOk) return Promise.resolve({ supported: false });
+    return Promise.all([fget('dir'), fget('dirty'), fget('last')]).then(function (r) {
+      var h = r[0];
+      if (!h) return { supported: true, on: false };
+      return h.queryPermission({ mode: 'readwrite' }).then(function (p) {
+        return { supported: true, on: true, name: h.name, file: AF_FILE, allowed: p === 'granted', waiting: !!r[1], last: r[2] || 0 };
+      });
+    });
+  };
+  /* now: write at once (after choosing or allowing the folder); otherwise in a moment, like any change */
+  OPS.afWrite = function (a) {
+    if (a && a.now) { clearTimeout(afT); return afWrite(); }
+    return fget('dir').then(function (h) { if (h) afSoon(); return h ? 'soon' : 'off'; });
+  };
+  OPS.afOff = function () { return Promise.all([fput('dir', null), fput('dirty', null)]).then(function () { return 'off'; }); };
+
   window.NSVault = OPS; // used directly by my.niveshsahayak.in's own page
 
   if (window.parent === window) return;
@@ -103,6 +179,7 @@
     if (!fn) return reply(false, 'Unknown operation');
     Promise.resolve().then(function () { return fn(m.args || {}); }).then(function (v) { reply(true, v); }, function (err) { reply(false, err); });
   });
+  if (afOk) fget('dirty').then(function (d) { if (d) afSoon(800); }, function () {});
   db().then(function () { window.parent.postMessage({ ns: 'vault', ready: true }, '*'); },
     function () { window.parent.postMessage({ ns: 'vault', ready: false }, '*'); });
 })();
