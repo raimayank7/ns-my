@@ -2,6 +2,7 @@
      item form   "Stock tracking": track '' | 'batch' (batch and expiry) | 'serial' (serial or IMEI numbers) | 'both'
      Settings    godowns [names], salesmen [{ name, rate, basis 'sales' | 'paid' }],
                  custom fields on documents cfields [{ id, label, types: [document types], print }],
+                 stock valuation stockValue 'avg' (weighted average, default) | 'fifo' (NSStock.valuation),
                  and the financial years closed in the App's Year end (shown here, changed there). */
 (function () {
   'use strict';
@@ -44,6 +45,9 @@
         '<textarea id="b2-gds" rows="3" dir="auto" placeholder="' + esc(t('b2.gdph')) + '">' + esc((S.godowns || []).join('\n')) + '</textarea></div></div></fieldset>' +
       '<fieldset class="card"><legend>' + esc(t('b2.sms')) + '</legend><p class="hint">' + esc(t('b2.smsh')) + '</p><div data-sms></div><button type="button" class="btn sm" data-smadd>+ ' + esc(t('b2.smadd')) + '</button></fieldset>' +
       '<fieldset class="card"><legend>' + esc(t('b2.cfs')) + '</legend><p class="hint">' + esc(t('b2.cfsh')) + '</p><div data-cfs></div><button type="button" class="btn sm" data-cfadd>+ ' + esc(t('b2.cfadd')) + '</button></fieldset>' +
+      '<fieldset class="card"><legend>' + esc(t('fr.val')) + '</legend><div class="fg"><div class="f wide"><label for="b2-val">' + esc(t('fr.valq')) + '</label><select id="b2-val">' +
+        [['avg', 'fr.val_avg'], ['fifo', 'fr.val_fifo']].map(function (o) { return '<option value="' + o[0] + '"' + ((S.stockValue === 'fifo' ? 'fifo' : 'avg') === o[0] ? ' selected' : '') + '>' + esc(t(o[1])) + '</option>'; }).join('') +
+        '</select><small class="hint">' + esc(t('fr.valh')) + '</small></div></div></fieldset>' +
       (closed.length ? '<fieldset class="card"><legend>' + esc(t('b2.closedy')) + '</legend><p>' + esc(closed.sort().join(', ')) + '</p><p class="hint">' + esc(t('b2.closedyh')) + '</p></fieldset>' : '') +
       '<div class="btns"><button type="submit" class="btn primary">' + esc(t('b2.saveset')) + '</button></div></form>';
   }
@@ -73,6 +77,7 @@
       S.godowns = $('#b2-gds', f).value.split(/\n+/).map(function (x) { return x.trim(); }).filter(function (x) { var k = x.toLowerCase(); if (!x || seen[k] || k === 'main') return false; seen[k] = 1; return true; });
       S.salesmen = SM.filter(function (x) { return x.name; }).map(function (x) { return { name: x.name, rate: NS.num(x.rate), basis: x.basis === 'paid' ? 'paid' : 'sales' }; });
       S.cfields = CF.filter(function (x) { return x.label; });
+      S.stockValue = $('#b2-val', f).value === 'fifo' ? 'fifo' : 'avg';
       save().then(function () { NS.toast(t('hub.setsaved')); });
     });
   }

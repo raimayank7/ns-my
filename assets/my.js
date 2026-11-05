@@ -6,7 +6,9 @@
   'use strict';
   var $ = NS.$, $$ = NS.$$, esc = NS.esc, t = NS.t;
   var UNITS = ['Nos', 'Pcs', 'Kg', 'Gm', 'Ltr', 'Ml', 'Mtr', 'Sq ft', 'Box', 'Pack', 'Set', 'Pair', 'Dozen', 'Bag', 'Ton', 'Hrs', 'Days', 'Month', 'Job'];
-  var RATES = [0, 0.25, 3, 5, 12, 18, 28, 40];
+  /* GST rates in use today (same list as the document makers from 1 Feb 2026: 28% is gone); an old saved rate still shows so it can be changed */
+  var RATES = [0, 0.1, 0.25, 1.5, 3, 5, 12, 18, 40];
+  function ratesWith(v) { return v === '' || v == null || RATES.some(function (g) { return String(g) === String(v); }) ? RATES : RATES.concat([Number(v)]).sort(function (a, b) { return a - b; }); }
   var ACCENTS = ['#0B3B5B', '#1D4ED8', '#047857', '#B45309', '#9D174D', '#334155'];
   var LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
   var BILLING = LOCAL ? 'http://localhost:8861/' : 'https://billing.niveshsahayak.in/';
@@ -50,6 +52,7 @@
     ],
     party: [
       ['role', 'hub.role', 'sel', { opts: [['customer', 'hub.r.customer'], ['supplier', 'hub.r.supplier'], ['both', 'hub.r.both']] }],
+      ['group', 'grp.group', 'pgroup', { hint: 'grp.h_pgroup' }],
       ['name', 'my.f.name', 'text', { req: 1 }], ['phone', 'l.phone', 'ltr', { mode: 'tel' }], ['email', 'l.email', 'ltr', { type: 'email' }],
       ['gstin', 'l.cgstin', 'gstin'], ['state', 'l.state', 'state'], ['addr', 'l.addr', 'area', { wide: 1 }], ['city', 'l.city', 'text'], ['pin', 'l.pin', 'ltr', { mode: 'numeric', max: 6 }],
       ['ship.addr', 'l.shaddr', 'area', { wide: 1, hint: 'hub.h.ship' }], ['ship.state', 'l.shstate', 'state'],
@@ -59,7 +62,7 @@
     ],
     item: [
       ['desc', 'hub.f.iname', 'text', { req: 1, wide: 1 }], ['kind', 'l.type', 'sel', { opts: [['goods', 'hub.k.goods'], ['service', 'hub.k.service']] }],
-      ['cat', 'b1.cat', 'cat', { hint: 'b1.h_cat' }],
+      ['group', 'grp.group', 'igroup', { hint: 'grp.h_igroup' }],
       ['code', 'hub.f.code', 'ltr'], ['hsn', 'l.hsn', 'ltr', { mode: 'numeric', max: 8 }], ['unit', 'l.unit', 'unit'],
       ['rate', 'b1.retail', 'num', { hint: 'b1.h_retail' }], ['wrate', 'b1.whole', 'num'], ['mrp', 'b1.mrp', 'num'], ['prate', 'b1.prate', 'num'], ['gst', 'l.gst', 'gst']
     ]
@@ -68,39 +71,44 @@
   var CSV = {
     biz: [['name', 'Name'], ['addr', 'Address'], ['city', 'City'], ['pin', 'PIN code'], ['state', 'State code'], ['gstin', 'GSTIN'], ['phone', 'Phone'], ['email', 'Email'], ['bankName', 'Bank'], ['bankAcc', 'Account no'], ['bankIfsc', 'IFSC'], ['bankBranch', 'Branch'], ['upi', 'UPI ID'], ['gst.legal', 'Legal name'], ['gst.trade', 'Trade name']],
     party: [['role', 'Type'], ['name', 'Name'], ['phone', 'Phone'], ['email', 'Email'], ['addr', 'Address'], ['city', 'City'], ['pin', 'PIN code'], ['state', 'State code'], ['gstin', 'GSTIN'], ['ship.addr', 'Ship-to address'], ['ship.state', 'Ship-to state code'], ['gst.legal', 'Legal name'], ['gst.trade', 'Trade name'],
-      ['ptype', 'Price type'], ['climit', 'Credit limit'], ['cdays', 'Credit days']],
-    item: [['desc', 'Name'], ['kind', 'Type'], ['cat', 'Category'], ['code', 'Item code'], ['hsn', 'HSN/SAC'], ['unit', 'Unit'], ['rate', 'Rate'], ['wrate', 'Wholesale rate'], ['mrp', 'MRP'], ['prate', 'Purchase price'], ['gst', 'GST %']]
+      ['ptype', 'Price type'], ['climit', 'Credit limit'], ['cdays', 'Credit days'], ['group', 'Group']],
+    item: [['desc', 'Name'], ['kind', 'Type'], ['cat', 'Group'], ['code', 'Item code'], ['hsn', 'HSN/SAC'], ['unit', 'Unit'], ['rate', 'Rate'], ['wrate', 'Wholesale rate'], ['mrp', 'MRP'], ['prate', 'Purchase price'], ['gst', 'GST %']]
   };
   var NAMEKEY = { biz: 'name', party: 'name', item: 'desc' };
-  var SECS = ['home', 'biz', 'party', 'item', 'doc', 'settings', 'backup', 'bin', 'log'];
+  var SECS = ['home', 'biz', 'party', 'pgroups', 'item', 'igroups', 'doc', 'settings', 'backup', 'bin', 'log'];
+  var GSEC = { pgroups: 'party', igroups: 'item' };   /* the Groups screen of each master */
   var NUMS = { rate: 1, wrate: 1, mrp: 1, prate: 1, climit: 1, cdays: 1 };
-  var cur = 'home', q = '', cat = '', S = {}, cache = {};
+  var cur = 'home', q = '', gf = '', S = {}, cache = {}, G = { party: [], item: [] };
 
   function key(s) { return String(s || '').trim().toLowerCase(); }
   function get(o, k) { return k.split('.').reduce(function (a, p) { return a == null ? a : a[p]; }, o); }
   function set(o, k, v) { var p = k.split('.'), last = p.pop(); p.forEach(function (x) { o = o[x] = o[x] && typeof o[x] === 'object' ? o[x] : {}; }); o[last] = v; }
   function load() {
-    return Promise.all(['biz', 'party', 'item', 'doc', 'bin', 'log'].map(function (s) { return NSStore.list(s); }).concat([NSStore.meta('settings'), NSStore.meta('lastBackup'), NSStore.meta('who'), NSStore.meta('pin')])).then(function (r) {
+    return Promise.all(['biz', 'party', 'item', 'doc', 'bin', 'log'].map(function (s) { return NSStore.list(s); }).concat([NSStore.meta('settings'), NSStore.meta('lastBackup'), NSStore.meta('who'), NSStore.meta('pin'), NSStore.meta('groups')])).then(function (r) {
       cache = { biz: r[0], party: r[1], item: r[2], doc: r[3], bin: r[4], log: r[5] }; S = r[6] || {}; S._last = r[7] || 0; S._who = r[8] || ''; S._pin = r[9] || null;
-      return cache;
-    });
+      G = gNorm(r[10]);
+      return catGroups();
+    }).then(function () { return cache; });
   }
   function title(s, r) {
     if (s === 'doc' && APPDOC[r.type]) return (r.type === 'pbill' && r.kind === 'return' ? 'Purchase return' : APPDOC[r.type][0]) + ' ' + (r.no || '');
     if (s === 'doc') return t(r.kind === 'estimate' ? 'doc.estimate' : r.type === 'note' ? 'k.' + r.kind : 'doc.' + (r.type || 'invoice')).replace(/^./, function (c) { return c.toUpperCase(); }) + ' ' + (r.no || '');
     return r[NAMEKEY[s]] || t('my.noname');
   }
+  /* POS bills are saved as invoices (counter: 1) but open in the POS site */
+  function kitType(r) { return r.counter && (!r.type || r.type === 'invoice') ? 'pos' : r.type; }
   function sub(s, r) {
-    if (s === 'doc') return NS.fmtDate(r.date) + ' · ' + esc(r.buyer && r.buyer.name || t('h.nocust')) + ' · <b>' + NS.money(r.total || 0) + '</b> · ' + esc(r.seller && r.seller.name || '') +
+    if (s === 'doc') return NS.fmtDate(r.date) + ' · ' + esc(r.buyer && r.buyer.name || (r.type === 'exp' ? r.cat || r.head || '' : t('h.nocust'))) + ' · <b>' + NS.money(r.total || 0) + '</b> · ' + esc(r.seller && r.seller.name || '') +
       (!r.type || r.type === 'invoice' || r.type === 'cashmemo' ? ' <span class="pill' + (r.status === 'paid' ? ' ok' : '') + '">' + esc(t(r.status === 'paid' ? 'h.paidp' : 'h.unpaidp')) + '</span>'
         : r.status ? ' <span class="pill' + (/^(acc|inv|sdone|prec|nadj|nref)$/.test(r.status) ? ' ok' : '') + '">' + esc(t('qs.' + r.status)) + '</span>' : '') +
       (APPDOC[r.type] ? ' <a href="' + APP + APPDOC[r.type][1] + '" target="_blank" rel="noopener">Nivesh Sahayak App ›</a>' :
-      KITOF[r.type] ? ' <a href="' + siteUrl(KITOF[r.type][0]) + '?open=' + encodeURIComponent(r.id) + '" target="_blank" rel="noopener">' + esc(t(KITOF[r.type][1])) + ' ›</a>' :
+      KITOF[kitType(r)] ? ' <a href="' + siteUrl(KITOF[kitType(r)][0]) + '?open=' + encodeURIComponent(r.id) + '" target="_blank" rel="noopener">' + esc(t(KITOF[kitType(r)][1])) + ' ›</a>' :
       ' <a href="' + toolUrl(SITEOF[r.type || 'invoice']) + '" target="_blank" rel="noopener">' + esc(t(TOOLS.filter(function (x) { return x[0] === SITEOF[r.type || 'invoice']; }).map(function (x) { return x[2]; })[0] || 'nav.billing')) + ' ›</a>');
-    if (s === 'item') return [r.cat && '<span class="pill">' + esc(r.cat) + '</span>', r.code && esc(r.code), r.hsn && 'HSN ' + esc(r.hsn), r.rate !== '' && r.rate != null && NS.money(NS.num(r.rate)) + (r.unit ? ' / ' + esc(r.unit) : ''),
+    if (s === 'item') return [NS.itemGroup(r, G).id && '<span class="pill">' + esc(gPath('item', NS.itemGroup(r, G).id)) + '</span>', r.code && esc(r.code), r.hsn && 'HSN ' + esc(r.hsn), r.rate !== '' && r.rate != null && NS.money(NS.num(r.rate)) + (r.unit ? ' / ' + esc(r.unit) : ''),
       NS.num(r.wrate) && esc(t('b1.whole')) + ' ' + NS.money(NS.num(r.wrate)), NS.num(r.mrp) && 'MRP ' + NS.money(NS.num(r.mrp)), r.gst !== '' && r.gst != null && 'GST ' + esc(r.gst) + '%', r.kind === 'service' && esc(t('hub.k.service')), r.sample && '<span class="b1-pill">' + esc(t('b1.sample')) + '</span>'].filter(Boolean).join(' · ');
     var bits = [r.gstin && '<span class="mono">' + esc(r.gstin) + '</span>', r.state && esc(NS.stateName(r.state)), r.phone && esc(r.phone)];
     if (s === 'party' && r.role && r.role !== 'customer') bits.unshift(esc(t('hub.r.' + r.role)));
+    if (s === 'party') { var pg = NS.partyGroup(r, G); bits.unshift('<span class="pill">' + esc(gPath('party', pg.id)) + '</span>'); }
     if (r.gst && r.gst.legal && key(r.gst.legal) !== key(r.name)) bits.push(esc(t('gf.legal')) + ': ' + esc(r.gst.legal));
     if (s === 'party' && r.ptype === 'wholesale') bits.push(esc(t('b1.pt_whole')));
     if (s === 'party' && NS.num(r.climit)) bits.push(esc(t('b1.climit')) + ' ' + NS.money(NS.num(r.climit)));
@@ -112,6 +120,7 @@
   /* ---------- sections ---------- */
   function show(sec, focus) {
     if (SECS.indexOf(sec) < 0) sec = 'home';
+    if (cur !== sec) gf = '';
     cur = sec; q = '';
     $$('[data-sec]').forEach(function (b) {
       var on = b.getAttribute('data-sec') === sec;
@@ -122,7 +131,7 @@
     return load().then(function () {
       counts();
       var pane = $('[data-pane]');
-      pane.innerHTML = (NS.sample.has(cache) ? NS.sample.note() : '') + (sec === 'home' ? homeHtml() : sec === 'settings' ? settingsHtml() : sec === 'backup' ? backupHtml() : sec === 'bin' ? binHtml() : sec === 'log' ? logHtml() : listHtml(sec));
+      pane.innerHTML = (NS.sample.has(cache) ? NS.sample.note() : '') + (GSEC[sec] ? groupsHtml(GSEC[sec]) : sec === 'home' ? homeHtml() : sec === 'settings' ? settingsHtml() : sec === 'backup' ? backupHtml() : sec === 'bin' ? binHtml() : sec === 'log' ? logHtml() : listHtml(sec));
       if (sec === 'home' && !cache.biz.length) wireWizard(pane);
       if (sec === 'settings') { wireSettings(pane); wirePin(pane); }
       if (sec === 'backup') wireBackup(pane);
@@ -131,7 +140,7 @@
     });
   }
   function counts() {
-    var n = { biz: cache.biz.length, party: cache.party.length, item: cache.item.length, doc: cache.doc.length, bin: cache.bin.length || '' };
+    var n = { biz: cache.biz.length, party: cache.party.length, item: cache.item.length, doc: cache.doc.length, bin: cache.bin.length || '', pgroups: G.party.length || '', igroups: G.item.length || '' };
     $$('[data-sec]').forEach(function (b) { var c = $('.n', b), s = b.getAttribute('data-sec'); if (c) c.textContent = n[s] != null ? n[s] : ''; });
     var m = $('[data-mode]'); if (m) m.textContent = t(NSStore.mode() === 'vault' ? 'my.vault' : 'my.local');
   }
@@ -159,21 +168,22 @@
   function listHtml(s) {
     var add = s === 'doc' ? '<a class="btn primary" href="' + BILLING + '" target="_blank" rel="noopener">' + esc(t('hub.newdoc')) + '</a>'
       : '<button type="button" class="btn primary" data-add>+ ' + esc(t('hub.add.' + s)) + '</button>';
-    return '<div class="pane-hd"><h2>' + esc(t('my.t.' + s)) + '</h2>' + add + '</div>' +
+    return '<div class="pane-hd"><h2>' + esc(t('my.t.' + s)) + '</h2>' + add + '</div>' + gTabs(s, false) +
       '<p class="soft">' + esc(t('hub.p.' + s)) + '</p>' +
       '<div class="tools-row"><label class="sr" for="my-q">' + esc(t('my.search')) + '</label><input id="my-q" type="search" placeholder="' + esc(t('my.ph')) + '">' +
       (s === 'doc' ? '' : '<label class="btn sm">' + esc(t('hub.imp')) + '<input type="file" accept=".csv,text/csv" data-imp hidden></label>') +
+      (s === 'party' || s === 'item' ? '<button type="button" class="btn sm" data-xlimp data-ic="up">' + esc(t('xi.open')) + '</button>' : '') +
       '<button type="button" class="btn sm" data-exp>' + esc(t('hub.exp')) + '</button>' +
       (s === 'doc' ? '<button type="button" class="btn sm" data-xl>' + esc(t('b1.xl_reg')) + '</button>' : s === 'item' ? '<button type="button" class="btn sm" data-xl>' + esc(t('b1.xl_items')) + '</button>' : '') +
       (s === 'doc' ? '' : '<button type="button" class="link" data-tpl>' + esc(t('hub.tpl')) + '</button>') + '</div>' +
-      (s === 'item' ? catChips() : '') +
+      (s === 'party' || s === 'item' ? gFilter(s) : '') +
       '<ul class="my-list" data-list></ul>';
   }
   function renderList() {
     var list = $('[data-list]'); if (!list) return;
     var s = cur, rows = (cache[s] || []).filter(function (r) {
       return !q || JSON.stringify([title(s, r), r.gstin, r.hsn, r.code, r.cat, r.phone, r.buyer && r.buyer.name, r.seller && r.seller.name]).toLowerCase().indexOf(q) >= 0;
-    }).filter(function (r) { return s !== 'item' || !cat || (cat === '-' ? !r.cat : key(r.cat) === cat); });
+    }).filter(function (r) { return !gf || (s !== 'party' && s !== 'item') || (gf === '-' ? !NS.itemGroup(r, G).id : inGroup(s, r, gf)); });
     rows.sort(function (a, b) { return s === 'doc' ? (b.date || '').localeCompare(a.date || '') || (b.no || '').localeCompare(a.no || '') : title(s, a).localeCompare(title(s, b)); });
     list.innerHTML = rows.length ? rows.map(function (r) {
       var def = s === 'biz' && S.defBiz === r.id;
@@ -194,7 +204,15 @@
     if (kind === 'area') h = '<textarea id="' + id + '" name="' + k + '" rows="2" dir="auto">' + esc(v) + '</textarea>';
     else if (kind === 'state') h = '<select id="' + id + '" name="' + k + '"><option value="">—</option>' + NS.STATES.map(function (s) { return '<option value="' + s[0] + '"' + (s[0] === v ? ' selected' : '') + '>' + s[0] + ' · ' + esc(s[1]) + '</option>'; }).join('') + '</select>';
     else if (kind === 'sel') h = '<select id="' + id + '" name="' + k + '">' + x.opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === v ? ' selected' : '') + '>' + esc(t(o[1])) + '</option>'; }).join('') + '</select>';
-    else if (kind === 'gst') h = '<select id="' + id + '" name="' + k + '"><option value="">—</option>' + RATES.map(function (g) { return '<option value="' + g + '"' + (String(g) === String(v) ? ' selected' : '') + '>' + g + '%</option>'; }).join('') + '</select>';
+    else if (kind === 'pgroup' || kind === 'igroup') {
+      var gk = kind === 'pgroup' ? 'party' : 'item';
+      v = gk === 'party' ? NS.partyGroup(r, G).id : NS.itemGroup(r, G).id;
+      h = '<select id="' + id + '" name="' + k + '">' + (gk === 'item' ? '<option value="">' + esc(t('grp.none')) + '</option>' : '') + gOptions(gk, v) +
+        '<option value="+">' + esc(t('grp.newopt')) + '</option></select>' +
+        '<span class="gnew" data-gnew hidden><label class="sr" for="' + id + '-new">' + esc(t('grp.newname')) + '</label><input id="' + id + '-new" dir="auto" maxlength="60" placeholder="' + esc(t('grp.newname')) + '">' +
+        '<button type="button" class="btn sm" data-gnew-add>' + esc(t('grp.addbtn')) + '</button></span>';
+    }
+    else if (kind === 'gst') h = '<select id="' + id + '" name="' + k + '"><option value="">—</option>' + ratesWith(v).map(function (g) { return '<option value="' + g + '"' + (String(g) === String(v) ? ' selected' : '') + '>' + g + '%' + (RATES.indexOf(g) < 0 ? ' ⚠' : '') + '</option>'; }).join('') + '</select>';
     else if (kind === 'img') h = '<div class="imgf"><img alt="" data-img="' + k + '"' + (v ? ' src="' + esc(v) + '"' : ' hidden') + '><input id="' + id + '" type="file" accept="image/*" data-imgin="' + k + '" data-max="' + x.max + '">' +
       '<button type="button" class="link" data-imgrm="' + k + '"' + (v ? '' : ' hidden') + '>' + esc(t('hub.rmimg')) + '</button></div>';
     else {
@@ -222,7 +240,6 @@
     f.innerHTML = '<div class="fg">' + FORM[s].map(function (x) { return fieldHtml(x, r); }).join('') + '</div>' +
       hubExt('form', s, r) +   /* sections added by other files (hubmore.js: stock tracking) */
       '<datalist id="hub-units">' + UNITS.map(function (u) { return '<option value="' + u + '">'; }).join('') + '</datalist>' +
-      '<datalist id="hub-cats">' + cats().map(function (u) { return '<option value="' + esc(u) + '">'; }).join('') + '</datalist>' +
       '<div class="dlg-foot"><button type="submit" class="btn primary">' + esc(t(id ? 'my.savech' : 'hub.save')) + '</button>' +
       (id ? '' : '<button type="submit" class="btn" data-again>' + esc(t('hub.saveadd')) + '</button>') +
       '<button type="button" class="btn" data-close>' + esc(t('my.cancel')) + '</button></div>';
@@ -242,6 +259,7 @@
       if (c.ok && c.state && st && !st.value) st.value = c.state;
     }
     if (g) { g.addEventListener('input', gstHint); gstHint(); }
+    wireGroupField(s, f);
     if (g && NS.gstFetchButton) NS.gstFetchButton(g, function (d) {
       ['name', 'addr', 'city', 'pin', 'state'].forEach(function (k) { var el = f.elements[k]; if (el && d[k]) el.value = d[k]; });
       if (s === 'biz' && d.reg && f.elements.reg) f.elements.reg.value = d.reg;
@@ -271,6 +289,9 @@
         set(r, x[0], v);
       });
       if (s === 'item') { if (r.gst !== '') r.gst = +r.gst; }
+      if (r.group === '+') r.group = '';
+      if (s === 'item') { if (r.group) r.cat = gName('item', r.group); else { delete r.group; r.cat = ''; } }
+      if (s === 'party' && (!r.group || r.group === (r.role === 'supplier' ? 'creditors' : 'debtors'))) delete r.group;   /* the built-in for its type: follows the type */
       Object.keys(NUMS).forEach(function (k) { if (r[k] != null && r[k] !== '') r[k] = NS.num(r[k]); });
       hubExt('read', s, r, f);
       if (s === 'party' && r.ship && !r.ship.addr) delete r.ship;
@@ -305,6 +326,187 @@
     });
   }
 
+  /* ---------- party and stock groups (meta 'groups'; reader NS.groupsOf / NS.partyGroup / NS.itemGroup in core.js) ---------- */
+  var gq = Promise.resolve();
+  function gNorm(m) { m = m && typeof m === 'object' ? m : {}; return { party: Array.isArray(m.party) ? m.party : [], item: Array.isArray(m.item) ? m.item : [] }; }
+  function gNewId() { return 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+  /* read the newest list, change it, save it: one change at a time, so two quick saves never lose each other's groups */
+  function editGroups(fn) {
+    gq = gq.catch(function () {}).then(function () { return NSStore.meta('groups'); }).then(function (m) {
+      var fresh = gNorm(m);
+      if (fn(fresh) === false) { G = fresh; return; }
+      return NSStore.meta('groups', fresh).then(function () { G = fresh; });
+    });
+    return gq;
+  }
+  /* every item category typed so far becomes an item group (items keep their cat text) */
+  function catGroups() {
+    var have = {}, add = [];
+    G.item.forEach(function (g) { have[key(g.name)] = 1; });
+    cache.item.forEach(function (i) { var c = String(i.cat || '').trim(); if (c && !have[key(c)] && !(i.group && G.item.some(function (g) { return g.id === i.group; }))) { have[key(c)] = 1; add.push(c); } });
+    if (!add.length) return Promise.resolve();
+    return editGroups(function (m) {
+      var n = 0;
+      add.forEach(function (c) { if (!m.item.some(function (g) { return key(g.name) === key(c); })) m.item.push({ id: gNewId() + (n++), name: c, under: '' }); });
+      return n > 0;
+    });
+  }
+  function gList(kind) { return NS.groupsOf(G, kind); }
+  function gGet(kind, id) { return gList(kind).filter(function (g) { return g.id === id; })[0]; }
+  function gName(kind, id) { var g = gGet(kind, id); return g ? g.name : ''; }
+  function gPath(kind, id) {
+    var g = gGet(kind, id); if (!g) return '';
+    var up = g.under && gGet(kind, g.under);
+    return up && !up.builtin ? up.name + ' › ' + g.name : g.name;
+  }
+  function gKids(kind, id) { return gList(kind).filter(function (g) { return g.under === id && !g.builtin; }); }
+  function gRoots(kind) { return kind === 'party' ? gList('party').filter(function (g) { return g.builtin; }) : gList('item').filter(function (g) { return !g.under || !gGet('item', g.under); }); }
+  function gOf(kind, r) { return kind === 'party' ? NS.partyGroup(r, G) : NS.itemGroup(r, G); }
+  /* a record is in a group when it is in it, in one of its sub-groups, or (built-ins) anywhere under it */
+  function inGroup(kind, r, id) { var g = gOf(kind, r); return g.id === id || g.under === id || (kind === 'party' && g.top === id); }
+  function members(kind, id) { return cache[kind].filter(function (r) { return gOf(kind, r).id === id; }); }
+  /* <option>s: tops then their sub-groups, indented; skip = ids left out; topOnly = no sub-groups (only groups that may hold a sub-group) */
+  function gOptions(kind, sel, skip, topOnly) {
+    skip = skip || [];
+    var opt = function (g, lv) { return skip.indexOf(g.id) >= 0 ? '' : '<option value="' + esc(g.id) + '"' + (g.id === sel ? ' selected' : '') + '>' + new Array(lv * 3 + 1).join(' ') + esc(g.name) + '</option>'; };
+    return gRoots(kind).map(function (r) {
+      var h = opt(r, 0);
+      if (kind === 'party') h += gKids('party', r.id).map(function (g) { return opt(g, 1) + (topOnly ? '' : gKids('party', g.id).map(function (x) { return opt(x, 2); }).join('')); }).join('');
+      else if (!topOnly) h += gKids('item', r.id).map(function (g) { return opt(g, 1); }).join('');
+      return h;
+    }).join('');
+  }
+  function gTabs(s, groups) {
+    if (s !== 'party' && s !== 'item') return '';
+    return '<nav class="seg cats gtabs" aria-label="' + esc(t('my.t.' + s)) + '"><a class="btn sm" href="#' + s + '"' + (groups ? '' : ' aria-current="page"') + '>' + esc(t('grp.list')) + '</a>' +
+      '<a class="btn sm" href="#' + (s === 'party' ? 'pgroups' : 'igroups') + '"' + (groups ? ' aria-current="page"' : '') + '>' + esc(t('grp.nav')) + ' <small class="mono">' + (s === 'party' ? G.party.length + 2 : G.item.length) + '</small></a></nav>';
+  }
+  function gFilter(s) {
+    if (s === 'item' && !G.item.length) return '';
+    return '<div class="gfilter"><label for="my-gf">' + esc(t('grp.group')) + '</label><select id="my-gf"><option value="">' + esc(t('grp.all')) + '</option>' + gOptions(s, gf) +
+      (s === 'item' ? '<option value="-"' + (gf === '-' ? ' selected' : '') + '>' + esc(t('grp.none')) + '</option>' : '') + '</select></div>';
+  }
+  function gSelect(kind, sel) { return (kind === 'item' ? '<option value="">' + esc(t('grp.none')) + '</option>' : '') + gOptions(kind, sel) + '<option value="+">' + esc(t('grp.newopt')) + '</option>'; }
+  /* the Group select on the party and item forms: "+ New group…" opens a name box under it */
+  function wireGroupField(s, f) {
+    var sel = f.elements.group; if (!sel) return;
+    var box = $('[data-gnew]', f), inp = $('input', box), last = sel.value;
+    sel.addEventListener('change', function () {
+      if (sel.value === '+') { box.hidden = false; inp.focus(); } else { box.hidden = true; last = sel.value; }
+    });
+    if (s === 'party' && f.elements.role) f.elements.role.addEventListener('change', function () {
+      var g = gGet('party', sel.value);
+      if (!g || g.builtin) { sel.value = last = f.elements.role.value === 'supplier' ? 'creditors' : 'debtors'; box.hidden = true; }
+    });
+    function add() {
+      var nm = inp.value.trim().replace(/\s+/g, ' ');
+      if (!nm) { NS.toast(t('grp.v_name'), 'bad'); inp.focus(); return; }
+      if (gDup(s, nm)) { NS.toast(t('grp.v_dup', { name: nm }), 'bad'); inp.focus(); return; }
+      var id = gNewId(), under = s === 'party' ? (f.elements.role && f.elements.role.value === 'supplier' ? 'creditors' : 'debtors') : '';
+      editGroups(function (m) { m[s].push({ id: id, name: nm, under: under }); }).then(function () {
+        sel.innerHTML = gSelect(s, id); sel.value = last = id; inp.value = ''; box.hidden = true; sel.focus(); NS.toast(t('grp.saved')); counts();
+      }, function (err) { NS.toast(t('nosave', { e: err.message }), 'bad'); });
+    }
+    $('[data-gnew-add]', box).addEventListener('click', add);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+  }
+  function gDup(kind, nm, not) {
+    var k = key(nm);
+    if (kind === 'party' && ['sundry debtors', 'sundry creditors', 'customers', 'suppliers'].indexOf(k) >= 0) return true;
+    return gList(kind).some(function (g) { return g.id !== not && key(g.name) === k; });
+  }
+  function groupsHtml(kind) {
+    var noun = function (n) { return t(kind === 'party' ? 'grp.n_party' : 'grp.n_item', { n: n }); };
+    function row(g, lv) {
+      var n = members(kind, g.id).length, kids = gKids(kind, g.id), all = cache[kind].filter(function (r) { return inGroup(kind, r, g.id); }).length;
+      var bits = [noun(all)];
+      if (kids.length) bits.push(t('grp.subs', { n: kids.length }));
+      if (g.builtin) bits.push(t('grp.builtin'), 'Tally: ' + (g.id === 'debtors' ? 'Sundry Debtors' : 'Sundry Creditors'));
+      return '<li data-gid="' + esc(g.id) + '" class="glv' + lv + '"><div class="hd2"><div class="who"><div><b class="ttl">' + esc(g.name) + '</b><div class="sub">' + esc(bits.join(' · ')) + '</div></div></div>' +
+        (g.builtin ? '' : '<div class="row"><button type="button" class="btn sm" data-gedit>' + esc(t('grp.rename')) + '</button><button type="button" class="btn sm" data-gmerge>' + esc(t('grp.merge')) + '</button>' +
+          '<button type="button" class="btn sm danger" data-gdel' + (n || kids.length ? ' aria-disabled="true" title="' + esc(t('grp.notempty', { name: g.name })) + '"' : '') + '>' + esc(t('grp.del')) + '</button></div>') + '</div></li>' +
+        kids.map(function (x) { return row(x, lv + 1); }).join('');
+    }
+    var roots = gRoots(kind), none = kind === 'item' ? cache.item.filter(function (r) { return !NS.itemGroup(r, G).id; }).length : 0;
+    return '<div class="pane-hd"><h2>' + esc(t('grp.t_' + kind)) + '</h2><button type="button" class="btn primary" data-gadd>+ ' + esc(t('grp.add')) + '</button></div>' + gTabs(kind, true) +
+      '<p class="soft">' + esc(t('grp.p_' + kind)) + '</p><ul class="my-list glist">' +
+      (roots.length ? roots.map(function (g) { return row(g, 0); }).join('') : '<li class="empty">' + esc(t('grp.empty')) + '</li>') + '</ul>' +
+      (none ? '<p class="soft">' + esc(t('grp.none')) + ': ' + esc(noun(none)) + '</p>' : '');
+  }
+  function openDlg(ttl, html, ok) {
+    var dlg = $('#hub-form'), f = $('form', dlg);
+    $('[data-form-title]', dlg).textContent = ttl;
+    f.onsubmit = null;
+    f.innerHTML = html + '<div class="dlg-foot"><button type="submit" class="btn primary">' + esc(ok) + '</button><button type="button" class="btn" data-close>' + esc(t('my.cancel')) + '</button></div>';
+    $('[data-close]', f).addEventListener('click', function () { dlg.close(); });
+    if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); }
+    return f;
+  }
+  /* new group, or rename / move one; a group with sub-groups stays at the top (one level of sub-groups) */
+  function groupForm(kind, id) {
+    var g = id ? gGet(kind, id) : null, kids = id ? gKids(kind, id) : [];
+    var under = g ? g.under : kind === 'party' ? (gf && gGet('party', gf) && gGet('party', gf).builtin ? gf : 'debtors') : '';
+    var opts = kind === 'party' ? (kids.length ? gRoots('party').map(function (r) { return '<option value="' + r.id + '"' + (r.id === under ? ' selected' : '') + '>' + esc(r.name) + '</option>'; }).join('') : gOptions('party', under, [id], true))
+      : '<option value="">' + esc(t('grp.top')) + '</option>' + (kids.length ? '' : gOptions('item', under, [id], true));
+    var f = openDlg(t(id ? 'grp.edit' : 'grp.add'), '<div class="fg"><div class="f wide"><label for="gf-name">' + esc(t('grp.name')) + ' *</label><input id="gf-name" name="name" dir="auto" maxlength="60" required value="' + esc(g ? g.name : '') + '"></div>' +
+      '<div class="f wide"><label for="gf-under">' + esc(t('grp.under')) + '</label><select id="gf-under" name="under">' + opts + '</select><small class="hint">' + esc(t('grp.h_under')) + '</small></div></div>',
+      t(id ? 'my.savech' : 'hub.save'));
+    var nmIn = f.elements.name; nmIn.focus();
+    f.onsubmit = function (e) {
+      e.preventDefault();
+      var nm = nmIn.value.trim().replace(/\s+/g, ' '), up = f.elements.under.value;
+      if (!nm) { NS.toast(t('grp.v_name'), 'bad'); nmIn.focus(); return; }
+      if (gDup(kind, nm, id)) { NS.toast(t('grp.v_dup', { name: nm }), 'bad'); nmIn.focus(); return; }
+      var moved = kind === 'item' && g && g.name !== nm ? members('item', id) : [];
+      editGroups(function (m) {
+        var x = id && m[kind].filter(function (y) { return y.id === id; })[0];
+        if (x) { x.name = nm; x.under = up; } else m[kind].push({ id: gNewId(), name: nm, under: up });
+      }).then(function () {
+        /* items keep cat = their group's name, for code that reads cat */
+        return moved.reduce(function (p, r) { return p.then(function () { r.group = id; r.cat = nm; return NSStore.put('item', r); }); }, Promise.resolve());
+      }).then(function () { NS.toast(t('grp.saved')); $('#hub-form').close(); return show(cur); }, function (err) { NS.toast(t('nosave', { e: err.message }), 'bad'); });
+    };
+  }
+  /* merge: every member moves to the chosen group, sub-groups go under it, then the group is deleted */
+  function mergeForm(kind, id) {
+    var g = gGet(kind, id), kids = gKids(kind, id), skip = [id].concat(kids.map(function (k) { return k.id; }));
+    var opts = gOptions(kind, '', skip, kids.length > 0);
+    if (!opts) { NS.toast(t('grp.nomerge'), 'bad'); return; }
+    var f = openDlg(t('grp.mergeinto', { name: g.name }), '<div class="fg"><div class="f wide"><label for="gf-into">' + esc(t('grp.mergeinto', { name: g.name })) + '</label><select id="gf-into" name="into">' + opts + '</select>' +
+      '<small class="hint">' + esc(t('grp.h_merge', { name: g.name })) + '</small></div></div>', t('grp.mergebtn'));
+    f.onsubmit = function (e) {
+      e.preventDefault();
+      var to = f.elements.into.value, toG = gGet(kind, to), recs = members(kind, id);
+      if (!toG || !confirm(t('grp.c_merge', { n: recs.length, a: g.name, b: toG.name }))) return;
+      recs.reduce(function (p, r) {
+        return p.then(function () {
+          r.group = to;
+          if (kind === 'item') r.cat = toG.name;
+          if (kind === 'party' && to === (r.role === 'supplier' ? 'creditors' : 'debtors')) delete r.group;
+          return NSStore.put(kind, r);
+        });
+      }, Promise.resolve()).then(function () {
+        return editGroups(function (m) { m[kind] = m[kind].filter(function (y) { return y.id !== id; }); m[kind].forEach(function (y) { if (y.under === id) y.under = to; }); });
+      }).then(function () { NS.toast(t('grp.merged', { n: recs.length })); $('#hub-form').close(); return show(cur); }, function (err) { NS.toast(t('nosave', { e: err.message }), 'bad'); });
+    };
+  }
+  function delGroup(kind, id) {
+    var g = gGet(kind, id); if (!g || g.builtin) return;
+    if (members(kind, id).length || gKids(kind, id).length) { NS.toast(t('grp.notempty', { name: g.name }), 'bad'); return; }
+    if (!confirm(t('grp.c_del', { name: g.name }))) return;
+    editGroups(function (m) { m[kind] = m[kind].filter(function (y) { return y.id !== id; }); })
+      .then(function () { NS.toast(t('grp.deleted')); return show(cur); }, function (err) { NS.toast(err.message, 'bad'); });
+  }
+  /* CSV: a group name -> its id; a name not known yet becomes a new group (parties: under Customers or Suppliers by type) */
+  function gFromCsv(kind, nm, role, made) {
+    var k = key(nm); if (!k) return '';
+    if (kind === 'party') { if (k === 'sundry debtors' || k === 'customers') return 'debtors'; if (k === 'sundry creditors' || k === 'suppliers') return 'creditors'; }
+    var hit = gList(kind).concat(made).filter(function (g) { return key(g.name) === k; })[0];
+    if (hit) return hit.id;
+    var g = { id: gNewId() + made.length, name: String(nm).trim(), under: kind === 'party' ? (role === 'supplier' ? 'creditors' : 'debtors') : '' };
+    made.push(g); return g.id;
+  }
+
   /* ---------- Batch 1: getting started, categories, recycle bin, edit history, Excel ---------- */
   function wizardHtml() {
     return '<div class="card b1-wiz"><h3>' + esc(t('b1.wiz')) + '</h3><p class="soft">' + esc(t('b1.wizp')) + '</p><form data-wiz novalidate><div class="fg">' +
@@ -334,16 +536,6 @@
         return saveSettings();
       }).then(function () { NS.toast(t('b1.wiz_done')); show('home'); }, function (err) { NS.toast(t('nosave', { e: err.message }), 'bad'); });
     });
-  }
-  function cats() {
-    var seen = {}, out = [];
-    cache.item.forEach(function (i) { var c = String(i.cat || '').trim(); if (c && !seen[key(c)]) { seen[key(c)] = 1; out.push(c); } });
-    return out.sort(function (a, b) { return a.localeCompare(b); });
-  }
-  function catChips() {
-    var list = cats(); if (!list.length) return '';
-    return '<div class="seg cats" role="group" aria-label="' + esc(t('b1.cat')) + '">' + [['', t('b1.cat_all')]].concat(list.map(function (c) { return [key(c), c]; }), [['-', t('b1.cat_none')]]).map(function (c) {
-      return '<button type="button" class="btn sm" data-cat="' + esc(c[0]) + '" aria-pressed="' + (cat === c[0]) + '">' + esc(c[1]) + '</button>'; }).join('') + '</div>';
   }
   function binHtml() {
     var rows = cache.bin.slice().sort(function (a, b) { return b.at - a.at; });
@@ -393,7 +585,7 @@
       '</div>' +
         '<h3 class="dc-sub">' + esc(t('hub.g.new')) + '</h3><div class="fg">' +
         '<div class="f"><label for="st-kind">' + esc(t('l.type')) + '</label><select id="st-kind" name="kind">' + ['tax', 'supply', 'plain'].map(function (k) { return '<option value="' + k + '"' + sel(k, c.kind || 'tax') + '>' + esc(t('k.' + k)) + '</option>'; }).join('') + '</select></div>' +
-        '<div class="f"><label for="st-gst">' + esc(t('hub.defgst')) + '</label><select id="st-gst" name="gst">' + RATES.map(function (g) { return '<option value="' + g + '"' + sel(g, gst) + '>' + g + '%</option>'; }).join('') + '</select></div>' +
+        '<div class="f"><label for="st-gst">' + esc(t('hub.defgst')) + '</label><select id="st-gst" name="gst">' + ratesWith(gst).map(function (g) { return '<option value="' + g + '"' + sel(g, gst) + '>' + g + '%</option>'; }).join('') + '</select></div>' +
         '<div class="f"><label for="st-unit">' + esc(t('hub.defunit')) + '</label><input id="st-unit" name="unit" dir="ltr" list="st-units" value="' + esc(c.unit || 'Nos') + '"><datalist id="st-units">' + UNITS.map(function (u) { return '<option value="' + u + '">'; }).join('') + '</datalist></div>' +
         '<div class="f"><label class="chk"><input type="checkbox" name="round"' + (c.round === false ? '' : ' checked') + '> ' + esc(t('l.round')) + '</label></div>' +
         '<div class="f wide"><span class="lbl" id="st-acc-l">' + esc(t('l.colour')) + '</span><div class="swatches" role="radiogroup" aria-labelledby="st-acc-l">' + ACCENTS.map(function (a, i) {
@@ -539,8 +731,14 @@
     }
     var cols = CSV[s], lines = [cols.map(function (c) { return c[1]; })];
     if (blankOnly) lines.push(cols.map(function (c) { return { role: 'customer', kind: 'goods', unit: 'Nos', gst: '18', state: '03' }[c[0]] || ''; }));
-    else cache[s].forEach(function (r) { lines.push(cols.map(function (c) { return get(r, c[0]); })); });
+    else cache[s].forEach(function (r) { lines.push(cols.map(function (c) { return csvGet(s, r, c[0]); })); });
     download((blankOnly ? 'template-' : '') + { biz: 'businesses', party: 'customers-suppliers', item: 'items-services' }[s] + (blankOnly ? '' : '-' + NS.today()) + '.csv', lines.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n'));
+  }
+  /* group columns hold the group's name (built-ins in English, so the file reads back in any language) */
+  function csvGet(s, r, k) {
+    if (s === 'party' && k === 'group') { var pg = NS.partyGroup(r, G); return pg.id === 'debtors' ? 'Customers' : pg.id === 'creditors' ? 'Suppliers' : pg.name; }
+    if (s === 'item' && k === 'cat') return NS.itemGroup(r, G).name || r.cat || '';
+    return get(r, k);
   }
   function parseCsv(txt) {
     txt = txt.replace(/^﻿/, '');
@@ -568,11 +766,11 @@
       var rows = parseCsv(txt);
       if (rows.length < 2) throw new Error(t('hub.imp.empty'));
       var cols = CSV[s], head = rows[0].map(function (h) { return key(h).replace(/[^a-z0-9%]/g, ''); });
-      var idx = cols.map(function (c) { var n = key(c[1]).replace(/[^a-z0-9%]/g, ''), alt = key(c[0]).replace(/[^a-z0-9]/g, ''); var i = head.indexOf(n); return i >= 0 ? i : head.indexOf(alt); });
+      var idx = cols.map(function (c) { var n = key(c[1]).replace(/[^a-z0-9%]/g, ''), alt = key(c[0]).replace(/[^a-z0-9]/g, ''); var i = head.indexOf(n); if (i < 0) i = head.indexOf(alt); if (i < 0 && c[0] === 'cat') i = head.indexOf('category'); return i; });
       var nameCol = cols.map(function (c) { return c[0]; }).indexOf(NAMEKEY[s]);
       if (idx[nameCol] < 0) throw new Error(t('hub.imp.nohead', { col: cols[nameCol][1] }));
       var byName = {}; cache[s].forEach(function (r) { byName[key(r[NAMEKEY[s]])] = r; });
-      var add = 0, upd = 0, bad = [], puts = [];
+      var add = 0, upd = 0, bad = [], puts = [], made = [];
       rows.slice(1).forEach(function (cells, n) {
         var r = {}, line = n + 2;
         cols.forEach(function (c, j) { if (idx[j] >= 0 && cells[idx[j]] != null && String(cells[idx[j]]).trim() !== '') set(r, c[0], String(cells[idx[j]]).trim()); });
@@ -586,15 +784,25 @@
         if (r.ptype) r.ptype = /whole/i.test(r.ptype) ? 'wholesale' : 'retail';
         if (r.gst != null) r.gst = NS.num(String(r.gst).replace('%', ''));
         var have = byName[nm];
+        if (s === 'party' && r.group) {
+          var role = r.role || (have && have.role) || 'customer';
+          r.group = gFromCsv('party', r.group, role, made);
+          if (r.group === (role === 'supplier' ? 'creditors' : 'debtors')) { r.group = ''; if (have) delete have.group; delete r.group; }
+        }
+        if (s === 'item' && r.cat) { r.group = gFromCsv('item', r.cat, '', made); r.cat = gList('item').concat(made).filter(function (g) { return g.id === r.group; })[0].name; }
         if (have) { Object.keys(r).forEach(function (k) { if (k === 'ship') have.ship = Object.assign(have.ship || {}, r.ship); else have[k] = r[k]; }); puts.push(have); upd++; }
         else { if (s === 'party' && !r.role) r.role = 'customer'; if (s === 'item' && !r.kind) r.kind = 'goods'; byName[nm] = r; puts.push(r); add++; }
       });
-      return puts.reduce(function (p, r) { return p.then(function () { return NSStore.put(s, r); }); }, Promise.resolve()).then(function () {
+      var gp = made.length ? editGroups(function (m) { made.forEach(function (g) { m[s].push(g); }); }) : Promise.resolve();
+      return puts.reduce(function (p, r) { return p.then(function () { return NSStore.put(s, r); }); }, gp).then(function () {
         NS.toast(t('hub.imp.done', { a: add, u: upd }) + (bad.length ? ' ' + t('hub.imp.bad', { rows: bad.slice(0, 8).join(', ') + (bad.length > 8 ? '…' : '') }) : ''), bad.length ? 'bad' : '');
         return show(s);
       });
     }).catch(function (e) { NS.toast(e.message || t('bk.unread'), 'bad'); });
   }
+
+  /* the Excel import (xlimport.js) reads the same columns */
+  NS.hubCsv = { cols: CSV, stateCode: stateCode };
 
   /* ---------- start ---------- */
   function init() {
@@ -611,10 +819,19 @@
       if (e.target.closest('[data-add]')) return openForm(cur);
       if (e.target.closest('[data-exp]')) return exportCsv(cur);
       if (e.target.closest('[data-tpl]')) return exportCsv(cur, true);
+      if (e.target.closest('[data-xlimp]')) return NS.xlImport && NS.xlImport.open();
       if (e.target.closest('[data-xl]')) return excel(cur);
       if (e.target.closest('[data-xllog]')) return NS.xlsx('edit-history-' + NS.today() + '.xlsx', [NS.reports.log(cache.log)]);
       if (e.target.closest('[data-binempty]')) { if (confirm(t('b1.binemptyc'))) Promise.all(cache.bin.map(function (b) { return NSStore.del('bin', b.id); })).then(function () { show('bin'); }); return; }
-      var cb = e.target.closest('[data-cat]'); if (cb) { cat = cb.getAttribute('data-cat'); $$('[data-cat]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === cb)); }); renderList(); return; }
+      if (e.target.closest('[data-gadd]')) return groupForm(GSEC[cur]);
+      var gl = e.target.closest('li[data-gid]');
+      if (gl) {
+        var gid = gl.getAttribute('data-gid');
+        if (e.target.closest('[data-gedit]')) groupForm(GSEC[cur], gid);
+        else if (e.target.closest('[data-gmerge]')) mergeForm(GSEC[cur], gid);
+        else if (e.target.closest('[data-gdel]')) delGroup(GSEC[cur], gid);
+        return;
+      }
       var li = e.target.closest('li[data-id]'); if (!li) return;
       var id = li.getAttribute('data-id');
       if (e.target.closest('[data-edit]')) openForm(cur, id);
@@ -628,7 +845,7 @@
       }
     });
     pane.addEventListener('input', function (e) { if (e.target.id === 'my-q') { q = e.target.value.trim().toLowerCase(); renderList(); } });
-    pane.addEventListener('change', function (e) { if (e.target.hasAttribute('data-imp') && e.target.files[0]) { importCsv(cur, e.target.files[0]); e.target.value = ''; } });
+    pane.addEventListener('change', function (e) { if (e.target.id === 'my-gf') { gf = e.target.value; renderList(); return; } if (e.target.hasAttribute('data-imp') && e.target.files[0]) { importCsv(cur, e.target.files[0]); e.target.value = ''; } });
     NS.onRestore = function () { show(cur); };
     document.addEventListener('ns-data', function () { show(cur); });
     document.addEventListener('ns-lang', function () { show(cur); });
