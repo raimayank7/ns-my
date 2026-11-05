@@ -122,7 +122,7 @@
         return '<li class="' + (s[1] ? 'ok' : '') + '"><span class="tick" aria-hidden="true">' + (s[1] ? '✓' : '') + '</span><a href="' + s[3] + '"' + (ext ? ' target="_blank" rel="noopener"' : '') + '>' + esc(t(s[2])) + '</a>' +
           (s[1] ? '<span class="sr">' + esc(t('hub.done')) + '</span>' : '') + '</li>';
       }).join('') + '</ol></div>' +
-      '<div class="card"><h3>' + esc(t('hub.tools')) + '</h3><div class="cards">' + TOOLS.map(function (x) {
+      '<div class="card"><h3>' + esc(t('hub.tools')) + '</h3><div class="cards">' + '<a href="' + APP + '" target="_blank" rel="noopener"><b>' + esc(t('nav.app')) + '</b><span>' + esc(t('hub.app')) + '</span></a>' + TOOLS.map(function (x) {
         return '<a href="' + toolUrl(x[0]) + '" target="_blank" rel="noopener"><b>' + esc(t(x[2])) + '</b><span>' + esc(t(x[3])) + '</span></a>'; }).join('') + '</div>' +
       '<p class="soft">' + esc(t('hub.toolsp')) + '</p></div>';
   }
