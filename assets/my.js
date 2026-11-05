@@ -33,7 +33,7 @@
   /* Settings: one small card per document, grouped: [group key, [[type, maker site, name key], ...]]; a card shows that type's PREFIXES rows */
   var DOCCARDS = [
     ['hub.grp.sell', [['quote', 'quotation', 'nav.quote'], ['proforma', 'proforma', 'Doc.proforma'], ['so', 'sales-order', 'Doc.so'], ['challan', 'challan', 'Doc.challan'],
-      ['cashmemo', 'cash-memo', 'Doc.cashmemo'], ['note', 'credit-note', 'nav.note'], ['exp', 'export-invoice', 'Doc.exp']]],
+      ['cashmemo', 'cash-memo', 'Doc.cashmemo'], ['note', 'credit-note', 'nav.note', 'credit'], ['note', 'debit-note', 'nav.dnote', 'debit'], ['exp', 'export-invoice', 'Doc.exp']]],
     ['hub.grp.buy', [['po', 'purchase-order', 'Doc.po'], ['self', 'self-invoice', 'Doc.self']]],
     ['hub.grp.money', [['receipt', 'receipt', 'Doc.receipt'], ['voucher', 'voucher', 'Doc.voucher'], ['petty', 'petty-cash', 'Doc.petty'], ['rent', 'rent-receipt', 'Doc.rent'], ['salary', 'salary-slip', 'Doc.salary']]],
     ['hub.grp.trade', [['pos', 'pos', 'nav.pos'], ['pharma', 'pharmacy', 'nav.pharmacy'], ['resto', 'restaurant', 'nav.restaurant'], ['lr', 'bilty', 'nav.bilty'], ['job', 'job-card', 'nav.jobcard'],
@@ -103,7 +103,7 @@
         : r.status ? ' <span class="pill' + (/^(acc|inv|sdone|prec|nadj|nref)$/.test(r.status) ? ' ok' : '') + '">' + esc(t('qs.' + r.status)) + '</span>' : '') +
       (APPDOC[r.type] ? ' <a href="' + APP + APPDOC[r.type][1] + '" target="_blank" rel="noopener">Nivesh Sahayak App ›</a>' :
       KITOF[kitType(r)] ? ' <a href="' + siteUrl(KITOF[kitType(r)][0]) + '?open=' + encodeURIComponent(r.id) + '" target="_blank" rel="noopener">' + esc(t(KITOF[kitType(r)][1])) + ' ›</a>' :
-      ' <a href="' + toolUrl(SITEOF[r.type || 'invoice']) + '" target="_blank" rel="noopener">' + esc(t(TOOLS.filter(function (x) { return x[0] === SITEOF[r.type || 'invoice']; }).map(function (x) { return x[2]; })[0] || 'nav.billing')) + ' ›</a>');
+      ' <a href="' + toolUrl(r.type === 'note' && r.kind === 'debit' ? 'debit-note' : SITEOF[r.type || 'invoice']) + '" target="_blank" rel="noopener">' + esc(t(TOOLS.filter(function (x) { return x[0] === (r.type === 'note' && r.kind === 'debit' ? 'debit-note' : SITEOF[r.type || 'invoice']); }).map(function (x) { return x[2]; })[0] || 'nav.billing')) + ' ›</a>');
     if (s === 'item') return [NS.itemGroup(r, G).id && '<span class="pill">' + esc(gPath('item', NS.itemGroup(r, G).id)) + '</span>', r.code && esc(r.code), r.hsn && 'HSN ' + esc(r.hsn), r.rate !== '' && r.rate != null && NS.money(NS.num(r.rate)) + (r.unit ? ' / ' + esc(r.unit) : ''),
       NS.num(r.wrate) && esc(t('b1.whole')) + ' ' + NS.money(NS.num(r.wrate)), NS.num(r.mrp) && 'MRP ' + NS.money(NS.num(r.mrp)), r.gst !== '' && r.gst != null && 'GST ' + esc(r.gst) + '%', r.kind === 'service' && esc(t('hub.k.service')), r.sample && '<span class="b1-pill">' + esc(t('b1.sample')) + '</span>'].filter(Boolean).join(' · ');
     var bits = [r.gstin && '<span class="mono">' + esc(r.gstin) + '</span>', r.state && esc(NS.stateName(r.state)), r.phone && esc(r.phone)];
@@ -139,9 +139,18 @@
       if (focus) { var h = $('h2', pane); if (h) { h.tabIndex = -1; h.focus(); } }
     });
   }
+  /* screen readers: "My businesses, 2" instead of the name and count run together */
+  function secNames() {
+    $$('[data-sec]').forEach(function (b) {
+      var l = $('span', b), c = $('.n', b), n = c ? c.textContent.trim() : '';
+      if (l && l.textContent.trim()) b.setAttribute('aria-label', l.textContent.trim() + (n ? ', ' + n : ''));
+    });
+  }
+  document.addEventListener('ns-lang', function () { setTimeout(secNames, 0); });
   function counts() {
     var n = { biz: cache.biz.length, party: cache.party.length, item: cache.item.length, doc: cache.doc.length, bin: cache.bin.length || '', pgroups: G.party.length || '', igroups: G.item.length || '' };
     $$('[data-sec]').forEach(function (b) { var c = $('.n', b), s = b.getAttribute('data-sec'); if (c) c.textContent = n[s] != null ? n[s] : ''; });
+    secNames();
     var m = $('[data-mode]'); if (m) m.textContent = t(NSStore.mode() === 'vault' ? 'my.vault' : 'my.local');
   }
   function homeHtml() {
@@ -595,7 +604,7 @@
       '</div></fieldset>' +
       '<fieldset class="card"><legend>' + esc(t('hub.g.docs')) + '</legend><p class="hint">' + esc(t('hub.h.docs')) + '</p>' + DOCCARDS.map(function (g) {
         return '<h3 class="dc-sub">' + esc(t(g[0])) + '</h3><div class="dcards">' + g[1].map(function (d) {
-          var rows = PREFIXES.filter(function (x) { return x[0] === d[0]; }), c2 = S[d[0]] || {};
+          var rows = PREFIXES.filter(function (x) { return x[0] === d[0] && (!d[3] || x[1] === d[3]); }), c2 = S[d[0]] || {};
           return '<div class="dcard"><div class="dc-h"><b>' + esc(t(d[2])) + '</b><a class="dc-open" href="' + siteUrl(d[1]) + '" target="_blank" rel="noopener">' + esc(t('hub.openmk')) + ' ›</a></div>' + rows.map(function (x) {
             var v = x[1] ? (c2.prefixes || {})[x[1]] : c2.prefix, id = 'st-p-' + x[0] + (x[1] ? '-' + x[1] : '');
             return '<div class="dc-row"><label for="' + id + '">' + esc(rows.length > 1 ? t(x[3]) : t('hub.pfx')) + '</label><input id="' + id + '" data-pre="' + x[0] + '|' + x[1] + '"' + (x[4] ? ' data-fix="' + x[4] + '"' : '') + ' dir="ltr" maxlength="8" autocapitalize="characters" value="' + esc(v != null ? v : x[2]) + '">' +
