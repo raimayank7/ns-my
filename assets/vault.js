@@ -18,12 +18,15 @@
       };
       /* another tab still holds the older database (opened before an update): the upgrade waits until it closes; say so */
       r.onblocked = function () { window.parent.postMessage({ ns: 'vault', blocked: true }, '*'); };
+      /* the browser reports "blocked" only to the first page that asks; a later page just waits, so after 4 s say it anyway */
+      var slow = setTimeout(r.onblocked, 4000);
       r.onsuccess = function () {
+        clearTimeout(slow);
         var d = r.result;
         d.onversionchange = function () { d.close(); dbp = null; };   /* a newer page needs to upgrade: let it */
         res(d);
       };
-      r.onerror = function () { rej(r.error); };
+      r.onerror = function () { clearTimeout(slow); rej(r.error); };
     });
     return dbp;
   }
