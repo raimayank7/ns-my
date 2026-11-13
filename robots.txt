@@ -1,4 +1,5 @@
 User-agent: *
 Disallow: /vault.html
+Disallow: /relay.html
 
 Sitemap: https://my.niveshsahayak.in/sitemap.xml
