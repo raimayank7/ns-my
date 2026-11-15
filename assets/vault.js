@@ -98,7 +98,7 @@
      The browser may ask for its OK again after a restart; a frame can't ask, so it tells the page ('af': 'ask') and the page
      shows "Auto save paused", which opens my.niveshsahayak.in to allow it. Changes made meanwhile wait ('dirty') and are written
      as soon as any page of this data home has the OK again. */
-  var AF_FILE = 'nivesh-sahayak-backup.json', AF_SKIP = { lastBackup: 1 }, afT = 0;
+  var AF_FILE = 'nivesh-sahayak-backup.json', AF_SKIP = { lastBackup: 1, autosave: 1 }, afT = 0;
   var afOk = 'showDirectoryPicker' in window;
   var fdbp;
   function fdb() {
@@ -112,7 +112,10 @@
   }
   function fget(k) { return fdb().then(function (d) { return new Promise(function (res) { var q = d.transaction('h').objectStore('h').get(k); q.onsuccess = function () { res(q.result); }; q.onerror = function () { res(null); }; }); }); }
   function fput(k, v) { return fdb().then(function (d) { return new Promise(function (res) { var t = d.transaction('h', 'readwrite'); v == null ? t.objectStore('h').delete(k) : t.objectStore('h').put(v, k); t.oncomplete = res; t.onerror = res; }); }); }
-  function afTell(st) { if (window.parent !== window) window.parent.postMessage({ ns: 'vault', af: st }, '*'); }
+  function afTell(st) {
+    if (window.parent !== window) window.parent.postMessage({ ns: 'vault', af: st }, '*');
+    else document.dispatchEvent(new CustomEvent('ns-autosave', { detail: st }));   /* my.niveshsahayak.in's own page uses this file directly */
+  }
   /* 'ok' written, 'ask' needs the browser's OK, 'off' no folder chosen, 'no' this browser can't */
   function afWrite() {
     if (!afOk) return Promise.resolve('no');
@@ -141,10 +144,13 @@
     clearTimeout(afT);
     afT = setTimeout(function () { afWrite().then(function (st) { if (st === 'ok' || st === 'ask') afTell(st); }); }, ms == null ? 1500 : ms);
   }
+  /* 15 Nov 2026: the file is written by the App or My data page itself (core.js); a frame inside another site never has the
+     browser's OK for the folder. Here: mark the change and tell the page around this frame, and the frames of other tabs. */
+  var afBc = null; try { afBc = new BroadcastChannel('ns-af'); afBc.onmessage = function () { afTell('chg'); }; } catch (e) {}
   function changed(store, value) {
-    if (!afOk) return;
     if (store === 'meta' && value && [].concat(value).every(function (v) { return v && AF_SKIP[v.id]; })) return;
-    fput('dirty', Date.now()).then(function () { afSoon(); }, function () {});
+    afTell('chg'); if (afBc) try { afBc.postMessage(1); } catch (e) {}
+    if (afOk) fput('dirty', Date.now()).catch(function () {});
   }
   ['put', 'del', 'clear'].forEach(function (op) {
     var f = OPS[op];
@@ -179,7 +185,6 @@
     if (!fn) return reply(false, 'Unknown operation');
     Promise.resolve().then(function () { return fn(m.args || {}); }).then(function (v) { reply(true, v); }, function (err) { reply(false, err); });
   });
-  if (afOk) fget('dirty').then(function (d) { if (d) afSoon(800); }, function () {});
   db().then(function () { window.parent.postMessage({ ns: 'vault', ready: true }, '*'); },
     function () { window.parent.postMessage({ ns: 'vault', ready: false }, '*'); });
 })();
