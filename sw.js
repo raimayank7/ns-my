@@ -1,5 +1,5 @@
-const CACHE = 'ns-my-8e8cdbd836';
-const SHELL = ["/", "/assets/b-acx.d23346c930.css", "/assets/b-core.ab119f49d8.js", "/assets/b-store.28a6de844d.js", "/assets/books.js?v=4192f14534", "/assets/xlsx.js?v=9c9abd01b6", "/assets/tally.js?v=8932db5030", "/assets/acct.js?v=6b41f03365", "/assets/cashare.js?v=bb7d6750a9", "/assets/caui.js?v=b89018e749", "/vault.html"];
+const CACHE = 'ns-my-ae614330ec';
+const SHELL = ["/", "/assets/b-acx.d23346c930.css", "/assets/b-core.b242fc64ef.js", "/assets/b-store.28126d7f86.js", "/assets/books.js?v=4192f14534", "/assets/xlsx.js?v=9c9abd01b6", "/assets/tally.js?v=8932db5030", "/assets/acct.js?v=6b41f03365", "/assets/cashare.js?v=bb7d6750a9", "/assets/caui.js?v=b89018e749", "/vault.html"];
 const WARM = [], LGROUPS = [];
 const slow = () => { const c = self.navigator && navigator.connection; return !!c && (c.saveData || /2g/.test(c.effectiveType || '')); };
 const keep = (c, list) => Promise.allSettled(list.map(u => c.match(u).then(m => m || c.add(u))));
