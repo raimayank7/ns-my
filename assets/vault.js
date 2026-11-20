@@ -253,7 +253,9 @@
           if (p !== 'granted') return 'ask';
           return OPS.exportAll().then(function (data) {
             var b = { app: 'Nivesh Sahayak', kind: 'backup', version: 1, saved: new Date().toISOString(), data: data };
-            return h.getFileHandle(AF_FILE, { create: true }).then(function (fh) { return fh.createWritable(); })
+            /* NSBiz/Data inside the chosen folder, as the App writes it (core.js) */
+            return (h.name === 'NSBiz' ? Promise.resolve(h) : h.getDirectoryHandle('NSBiz', { create: true })).then(function (r) { return r.getDirectoryHandle('Data', { create: true }); })
+              .then(function (dd) { return dd.getFileHandle(AF_FILE, { create: true }); }).then(function (fh) { return fh.createWritable(); })
               .then(function (w) { return w.write(JSON.stringify(b, null, 1)).then(function () { return w.close(); }); });
           }).then(function () {
             return tx('meta', 'readwrite', function (s) { s.put({ id: 'lastBackup', v: Date.now(), updated: Date.now() }); });
