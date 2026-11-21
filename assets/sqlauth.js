@@ -237,6 +237,25 @@
     };
     /* may this user do this to this record? (screens and store.js ask before a delete writes its recycle-bin copy) */
     W.can = function (a) { var r = a.store === 'doc' ? (O.get({ store: 'doc', id: a.id }) || a.row || {}) : (a.row || { id: a.id }); return check(a, a.store, r, a.act).then(function () { return true; }, function (e) { if (/NSAUTH: no right|back date/.test(e.message)) return false; throw e; }); };
+    /* logins off again (the owner's choice): the owner's password once more; every data file is unlocked first (a failure leaves
+       logins on), then the users, roles, logins and the recovery seal are removed */
+    W.loginsOff = function (a) {
+      return check(a).then(function (p) {
+        if (!p) return true;
+        if (p.role !== 'owner') throw err('only the owner');
+        var u = userRow(sess(a.tok).user);
+        return hashOf(a.pw, u.salt, u.iter).then(function (h) {
+          if (h.slice(0, 64) !== u.hash) throw err('wrong name or password');
+          if (!kv('cipher')) return;
+          core.closeAll();
+          return Promise.resolve(A.decryptAll()).then(function () { core.closeAll(); });
+        }).then(function () {
+          U.exec('DELETE FROM sessions; DELETE FROM users; DELETE FROM roles; DELETE FROM keyinfo;');
+          SESS.clear();
+          return true;
+        });
+      });
+    };
     W.hello = function () { return { on: on() }; };
     W._close = function () { try { U.close(); } catch (e) {} };
     return W;

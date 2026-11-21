@@ -357,6 +357,12 @@
     setupOwner: function (a) { return SQL.ready.then(function () { return sq('setupOwner', a); }).then(function (r) { setTok(r.tok); if (!lanTok()) ME = r.me; return dropCopy().then(function () { return { me: r.me, recovery: r.recovery, tok: lanTok() ? r.tok : undefined }; }); }); },
     logout: function () { var t = tok(); setTok(''); if (!lanTok()) ME = null; return SQL.ready.then(function () { return SQL.on ? SQL.call('logout', { tok: t }) : true; }); },
     can: function (a) { return AREADY().then(function () { return LOGINS ? sq('can', a || {}) : true; }); },
+    loginsOff: function (a) {
+      return SQL.ready.then(function () { return sq('loginsOff', a || {}); }).then(function () {
+        setTok(''); ME = null; LOGINS = false; areadyP = null;
+        return idbDel('meta', 'nsbizLogins').catch(function () {}).then(mirror).then(function () { return true; });
+      });
+    },
     users: function (a) { return sq('users', a || {}); },
     addUser: function (a) { return sq('addUser', a || {}); },
     setUser: function (a) { return sq('setUser', a || {}); },

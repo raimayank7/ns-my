@@ -60,6 +60,15 @@ function adapter() {
         try { db.exec("PRAGMA rekey='" + String(dk).replace(/[^0-9a-f]/g, '') + "'"); } finally { db.close(); }
       }
       KEY = dk;
+    },
+    /* logins off: every data file unlocked again (PRAGMA rekey with an empty key) */
+    decryptAll() {
+      for (const n of POOL.getFileNames()) {
+        if (!/\.sqlite$/.test(n) || n === '/Users.sqlite') continue;
+        const db = rawDb(n, KEY);
+        try { db.exec("PRAGMA rekey=''"); } finally { db.close(); }
+      }
+      KEY = '';
     }
   };
 }
