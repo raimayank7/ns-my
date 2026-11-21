@@ -109,8 +109,200 @@
   }
   function check(store) { if (STORES.indexOf(store) < 0) throw new Error('Unknown store ' + store); }
 
+  /* ---------- the browser database (IndexedDB): the old store, kept up to date as a safety copy (Stage 1) ---------- */
+  function idbAll(s) { return tx(s, 'readonly', function (o) { return o.getAll(); }); }
+  function idbGet(s, id) { return tx(s, 'readonly', function (o) { return o.get(id); }); }
+  function idbPut(s, list) { return tx(s, 'readwrite', function (o) { list.forEach(function (v) { o.put(v); }); }).then(function () { return list.length; }); }
+  function idbDel(s, id) { return tx(s, 'readwrite', function (o) { o.delete(id); }); }
+  function idbClear(s) { return tx(s, 'readwrite', function (o) { o.clear(); }); }
+
+  /* ---------- NSBiz data on SQLite, Stage 1 (owner 20 Nov 2026) ----------
+     The data lives in SQLite files (sqlworker.js): Common.sqlite + one file per business per year (NSBiz01/2026-27.sqlite …).
+     The pool file store lets one tab at a time hold the files, so the data-home frame that gets the 'nsbiz-sql' lock starts
+     the worker and serves every other tab over BroadcastChannel 'nsbiz-sql'. A frozen or closing tab gives the lock away
+     and the next tab takes over. Every save also goes into the old browser database, so nothing is lost if SQLite is not
+     there (old browser, private window) or fails: that tab then works on the old database and marks it ('sqlBehind'), and the
+     next SQLite start takes everything in again from it. Switch off for a test: ?nosql=1 or localStorage nsbiz-sql = off. */
+  var SQL = (function () {
+    var off = false;
+    try { off = /[?&]nosql=1/.test(location.search) || localStorage.getItem('nsbiz-sql') === 'off'; } catch (e) {}
+    /* the Windows program (Stage 2): its own SQLite files in Public Documents\NSBiz\Data, reached through its local server */
+    if (window.NSD_SQL && !off) {
+      var dk = { has: true, on: false, desk: true };
+      dk.call = function (op, args) {
+        /* the main PC's hidden data home window (office network) asks the program directly (ns-desktop vault-preload.js) */
+        if (typeof window.nsdSql === 'function') return window.nsdSql(op, args || {}).then(function (m) { if (!m || !m.ok) throw new Error(m && m.error || 'failed'); return m.result; });
+        return fetch(window.NSD_SQL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-NSD': '1' }, body: JSON.stringify({ op: op, args: args || {} }) })
+          .then(function (r) { return r.json(); }).then(function (m) { if (!m.ok) throw new Error(m.error || 'failed'); return m.result; });
+      };
+      dk.raw = dk.call;
+      /* the first window to start takes in the old browser database once (several windows: one at a time) */
+      dk.ready = dk.call('hello', {}).then(function () { return navigator.locks ? navigator.locks.request('nsbiz-sql-start', function () { return dk.catchUp(); }) : dk.catchUp(); })
+        .then(function () { dk.on = true; return true; }, function (e) { dk.error = String(e && e.message || e); return false; });
+      return dk;
+    }
+    var HAS =!off && typeof Worker === 'function' && typeof BroadcastChannel === 'function' && typeof WebAssembly === 'object' &&
+      navigator.locks && navigator.locks.request && navigator.storage && navigator.storage.getDirectory;
+    if (!HAS) return { has: false, ready: Promise.resolve(false), on: false, call: function () { return Promise.reject(new Error('no sqlite')); } };
+    var me = Math.random().toString(36).slice(2), seq = 0, waitW = {}, waitB = {}, worker = null, owner = false, release = null, api = { has: true, on: false };
+    var bc = new BroadcastChannel('nsbiz-sql');
+    function wcall(op, args) {
+      return new Promise(function (res, rej) { var id = ++seq; waitW[id] = [res, rej]; worker.postMessage({ id: id, op: op, args: args }); });
+    }
+    function onW(e) { var m = e.data, w = waitW[m.id]; if (!w) return; delete waitW[m.id]; if (m.ok) w[0](m.result); else w[1](new Error(m.result)); }
+    /* the owner answers other tabs one request at a time, in order */
+    var line = Promise.resolve();
+    bc.onmessage = function (e) {
+      var m = e.data || {};
+      if (m.re && m.to === me) { var w = waitB[m.re]; if (w) { delete waitB[m.re]; clearTimeout(w[2]); if (m.ok) w[0](m.result); else w[1](new Error(m.result)); } return; }
+      if (m.ack && m.to === me) { var k = waitB[m.ack]; if (k) { clearTimeout(k[2]); k[2] = setTimeout(k[3], 180000); } return; }   /* the owner has it: wait (big lists take seconds), only give up after 3 minutes */
+      if (m.ask && owner) {
+        bc.postMessage({ ack: m.ask, to: m.from });
+        line = line.then(function () { return api.ready; }).then(function (ok) {
+          if (!ok) throw new Error('sqlite unavailable');
+          return wcall(m.op, m.args);
+        }).then(function (r) { bc.postMessage({ re: m.ask, to: m.from, ok: true, result: r }); }, function (er) { bc.postMessage({ re: m.ask, to: m.from, ok: false, result: String(er && er.message || er) }); });
+      }
+      if (m.up && !owner && api.upFn) api.upFn(true);
+      if (m.down && !owner && api.upFn) api.upFn(false);
+    };
+    function bcall(op, args, tries) {
+      return new Promise(function (res, rej) {
+        var id = me + ':' + (++seq), again = function () {
+          delete waitB[id];
+          if ((tries || 0) < 5) bcall(op, args, (tries || 0) + 1).then(res, rej); else rej(new Error('no answer'));
+        }, t = setTimeout(again, 3000);   /* no "got it" from an owner in 3 s: the owner tab is changing; ask again */
+        waitB[id] = [res, rej, t, again];
+        bc.postMessage({ ask: id, from: me, op: op, args: args });
+      });
+    }
+    api.call = function (op, args) { return owner ? api.ready.then(function () { return wcall(op, args); }) : bcall(op, args); };
+    api.raw = function (op, args) { return wcall(op, args); };   /* the owner's start-up only (before 'ready') */
+    function take() {
+      navigator.locks.request('nsbiz-sql', function () {
+        return new Promise(function (rel) {
+          release = rel; owner = true;
+          worker = new Worker('/assets/sqlworker.js?v=' + (window.NS_SQLV || ''), { type: 'module' });
+          worker.onmessage = onW;
+          worker.onerror = function () { Object.keys(waitW).forEach(function (k) { waitW[k][1](new Error('worker failed')); delete waitW[k]; }); };
+          api.ready = wcall('hello', {}).then(function () { return api.catchUp(); }).then(function () { api.on = true; bc.postMessage({ up: 1 }); return true; },
+            function (er) { api.on = false; api.error = String(er && er.message || er); bc.postMessage({ down: 1 }); return false; });
+          readyRes(api.ready);
+        });
+      });
+    }
+    function give() {   /* this tab is being frozen or closed: let another tab take over */
+      if (!owner) return;
+      owner = false; api.on = false;
+      var w = worker; worker = null;
+      var done = function () { try { w && w.terminate(); } catch (e) {} if (release) { var r = release; release = null; r(); } };
+      if (w) { try { w.postMessage({ id: -1, op: 'pause' }); } catch (e) {} setTimeout(done, 300); } else done();
+    }
+    var readyRes;
+    api.ready = new Promise(function (res) { readyRes = res; });
+    /* a tab that is not the owner: SQLite is "on" once the owner says hello */
+    api.upFn = function (ok) { api.on = ok; readyRes(ok); };
+    take();
+    setTimeout(function () {   /* nobody answered: ask the owner directly once, else stay on the old database for now */
+      if (owner) return;
+      bcall('hello', {}, 4).then(function () { api.upFn(true); }, function () { api.upFn(false); });
+    }, 400);
+    document.addEventListener('freeze', give);
+    window.addEventListener('pagehide', give);
+    document.addEventListener('resume', function () { if (!owner) take(); });
+    return api;
+  })();
+  window.NSSql = SQL;
+
+  /* ---------- user logins (Stage 2) ----------
+     The login lives in this tab only (sessionStorage of the data home); every SQLite command carries it and sqlauth.js checks the
+     rights where the data is. Once logins are on: no fallback to the old browser database (it would bypass the rights) and no
+     safety copy in it (the data there would be readable without a password): it is emptied, only the mark 'nsbizLogins' stays,
+     so a browser that cannot run SQLite refuses instead of showing old data. */
+  var AUTHERR = /^NSAUTH: /;
+  /* the Windows program's office network: the main PC's hidden data home window does the work of every PC, one command at a
+     time, each with the login of the PC that asked (window.__nsdTok, set by the program around the command) */
+  function lanTok() { return typeof window.__nsdTok === 'string'; }
+  function tok() { if (lanTok()) return window.__nsdTok; try { return sessionStorage.getItem('nsbiz-tok') || ''; } catch (e) { return ''; } }
+  function setTok(t) { if (lanTok()) return; try { if (t) sessionStorage.setItem('nsbiz-tok', t); else sessionStorage.removeItem('nsbiz-tok'); } catch (e) {} }
+  var LOGINS = false, ME = null;
+  function withTok(a) { var o = {}; for (var k in a) o[k] = a[k]; o.tok = tok(); return o; }
+  function idbLocked() { return idbGet('meta', 'nsbizLogins').then(function (r) { return !!r; }, function () { return false; }); }
+  function lockedErr() { return Promise.reject(new Error('NSAUTH: this browser cannot open data protected by logins; use Chrome, Edge or the NSBiz program')); }
+  /* logins just came on (or this tab logged in): the old browser database keeps no copy any more */
+  function dropCopy() {
+    LOGINS = true;
+    return STORES.reduce(function (p, s) { return p.then(function () { return idbClear(s); }); }, Promise.resolve())
+      .then(function () { return idbPut('meta', [{ id: 'nsbizLogins', v: Date.now(), updated: Date.now() }]); }).catch(function () {});
+  }
+  function sq(op, a) { return SQL.call(op, withTok(a)); }
+  /* Stage 4: after a backup is brought back with logins off, the old browser copy gets the same data (it is the fall-back) */
+  function mirror() {
+    return STORES.reduce(function (p, s) {
+      return p.then(function () { return sq('list', { store: s }).then(function (rows) { return idbClear(s).then(function () { return rows.length ? idbPut(s, rows) : 0; }); }); });
+    }, Promise.resolve()).then(function () { return idbDel('meta', 'sqlBehind').catch(function () {}); }).catch(function () {});
+  }
+  /* after a backup came back: the login of this tab belonged to the replaced files; the old browser copy follows the new data */
+  function afterRestore(r) {
+    setTok(''); ME = null; LOGINS = false; areadyP = null;
+    return SQL.call('authStatus', {}).then(function (st) {
+      if (st && st.on) return dropCopy().then(function () { return r; });
+      return mirror().then(function () { return r; });
+    });
+  }
+  function b64(u) { var s = '', i, n = u.length; for (i = 0; i < n; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, Math.min(n, i + 32768))); return btoa(s); }
+  function unb64(t) { var s = atob(t), u = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+  var areadyP = null;
+  function AREADY() {
+    if (!areadyP) areadyP = SQL.ready.then(function () {
+      if (!SQL.on) return null;
+      return SQL.call('authStatus', withTok({})).then(function (st) { LOGINS = !!st.on; ME = st.me || null; if (LOGINS) return idbLocked().then(function (l) { return l ? null : dropCopy(); }); }, function () {});
+    });
+    return areadyP;
+  }
+  /* the engine every command below uses: SQLite when it is there, else the old database; every save goes into both until logins are on */
+  function behind() { return idbPut('meta', [{ id: 'sqlBehind', v: Date.now(), updated: Date.now() }]); }
+  function fallback(e, fn) { if (e && AUTHERR.test(e.message || '')) throw e; return fn(); }
+  function plain(fn) { return function () { var args = arguments; return idbLocked().then(function (l) { return l ? lockedErr() : fn.apply(null, args); }); }; }
+  var E = {
+    all: function (s) { return AREADY().then(function () { return SQL.on ? sq('list', { store: s }).catch(function (e) { return fallback(e, function () { return plain(idbAll)(s); }); }) : plain(idbAll)(s); }); },
+    get: function (s, id) { return AREADY().then(function () { return SQL.on ? sq('get', { store: s, id: id }).catch(function (e) { return fallback(e, function () { return plain(idbGet)(s, id); }); }) : plain(idbGet)(s, id); }); },
+    put: function (s, list) {
+      return AREADY().then(function () {
+        if (!SQL.on) return plain(idbPut)(s, list).then(function (n) { return !SQL.has ? n : behind().then(function () { return n; }); });
+        return sq('put', { store: s, rows: list }).then(function () { return LOGINS ? list.length : idbPut(s, list); },
+          function (e) { return fallback(e, function () { return idbPut(s, list).then(function (n) { return behind().then(function () { return n; }); }); }); });
+      });
+    },
+    del: function (s, id) {
+      return AREADY().then(function () {
+        if (!SQL.on) return plain(idbDel)(s, id).then(function () { return SQL.has ? behind() : null; });
+        return sq('del', { store: s, id: id }).then(function () { return LOGINS ? null : idbDel(s, id); }, function (e) { return fallback(e, function () { return idbDel(s, id).then(behind); }); });
+      });
+    },
+    clear: function (s) {
+      return AREADY().then(function () {
+        if (!SQL.on) return plain(idbClear)(s).then(function () { return SQL.has ? behind() : null; });
+        return sq('clear', { store: s }).then(function () { return LOGINS ? null : idbClear(s); }, function (e) { return fallback(e, function () { return idbClear(s).then(behind); }); });
+      });
+    }
+  };
+  /* owner start: the first time (or after a tab worked without SQLite), take everything in from the old database.
+     Never once logins are on: the old database is then empty on purpose. */
+  SQL.catchUp = function () {
+    return Promise.all([SQL.raw('authStatus', {}), SQL.raw('info', { k: 'migrated' }).catch(function () { return null; }), idbGet('meta', 'sqlBehind')]).then(function (r0) {
+      if (r0[0] && r0[0].on) { LOGINS = true; return; }
+      var r = [r0[1], r0[2]];
+      if (r[0] && !r[1]) return;
+      var data = {};
+      return STORES.reduce(function (p, st) { return p.then(function () { return idbAll(st).then(function (rows) { data[st] = st === 'meta' ? rows.filter(function (x) { return x && x.id !== 'sqlBehind'; }) : rows; }); }); }, Promise.resolve())
+        .then(function () { return SQL.raw('importRaw', { data: data, force: true }); })
+        .then(function () { return r[1] ? idbDel('meta', 'sqlBehind') : null; });
+    });
+  };
+
   function kept(store) { var e = new Error('The edit history cannot be changed or removed'); e.kept = true; return Promise.reject(e); }
-  function rawPut(store, list) { return tx(store, 'readwrite', function (s) { list.forEach(function (v) { s.put(v); }); }).then(function () { return list.length; }); }
+  function rawPut(store, list) { return E.put(store, list); }
   /* add only: rows whose id is already there are left as they are */
   function addOnly(store, list) {
     return OPS.list({ store: store }).then(function (have) {
@@ -125,8 +317,8 @@
     var run = function () { return navigator.locks && navigator.locks.request ? navigator.locks.request('ns-log', fn) : fn(); };
     var p = logQ.then(run, run); logQ = p.catch(function () {}); return p;
   }
-  function getHead() { return tx('meta', 'readonly', function (s) { return s.get(HEAD); }).then(function (r) { return r && r.v || ''; }); }
-  function setHead(h) { return tx('meta', 'readwrite', function (s) { s.put({ id: HEAD, v: h, updated: Date.now() }); }); }
+  function getHead() { return E.get('meta', HEAD).then(function (r) { return r && r.v || ''; }); }
+  function setHead(h) { return E.put('meta', [{ id: HEAD, v: h, updated: Date.now() }]); }
   /* entries in the order given: each is sealed onto the newest seal; an id already in the history is skipped */
   function logAdd(list) {
     return serial(function () {
@@ -136,16 +328,17 @@
         if (!add.length) return 0;
         return getHead().then(function (head) {
           if (!head && CHAIN) head = CHAIN.newestSeal(have);
-          return add.reduce(function (p, e) {
+          var who = lanTok() ? sq('authStatus', {}).then(function (s) { return s && s.me; }, function () { return null; }) : Promise.resolve(ME);
+          return who.then(function (me) { if (me) add.forEach(function (e) { if (!e.user) e.user = me.name; }); }).then(function () { return add.reduce(function (p, e) {   /* logins on: the user who made it, sealed with the entry */
             return p.then(function () { return CHAIN ? CHAIN.seal(e, head).then(function (x) { head = x.h || head; }) : null; });
-          }, Promise.resolve()).then(function () { return rawPut('log', add); }).then(function (n) { return head ? setHead(head).then(function () { return n; }) : n; });
+          }, Promise.resolve()); }).then(function () { return rawPut('log', add); }).then(function (n) { return head ? setHead(head).then(function () { return n; }) : n; });
         });
       });
     });
   }
   var OPS = {
-    list: function (a) { check(a.store); return tx(a.store, 'readonly', function (s) { return s.getAll(); }); },
-    get: function (a) { check(a.store); return tx(a.store, 'readonly', function (s) { return s.get(a.id); }); },
+    list: function (a) { check(a.store); return E.all(a.store); },
+    get: function (a) { check(a.store); return E.get(a.store, a.id); },
     put: function (a) {
       check(a.store);
       var list = Array.isArray(a.value) ? a.value : [a.value];
@@ -154,8 +347,52 @@
       if (a.store === 'meta' && list.some(function (v) { return v && v.id === HEAD; })) return kept('meta');   /* the newest seal is kept by this page only */
       return rawPut(a.store, list);
     },
-    del: function (a) { check(a.store); if (KEEP[a.store] || a.store === 'meta' && a.id === HEAD) return kept(a.store); return tx(a.store, 'readwrite', function (s) { s.delete(a.id); }); },
-    clear: function (a) { check(a.store); if (KEEP[a.store]) return kept(a.store); return tx(a.store, 'readwrite', function (s) { s.clear(); }); },
+    del: function (a) { check(a.store); if (KEEP[a.store] || a.store === 'meta' && a.id === HEAD) return kept(a.store); return E.del(a.store, a.id); },
+    clear: function (a) { check(a.store); if (KEEP[a.store]) return kept(a.store); return E.clear(a.store); },
+    /* Stage 1 extras: where the data is (SQLite or the old database) and its files; Stage 3 screens ask by business and year */
+    /* ---------- user logins (Stage 2): the page asks, the data home keeps the login for this tab ---------- */
+    authStatus: function () { return AREADY().then(function () { return SQL.on ? sq('authStatus', {}).then(function (st) { st.sqlite = true; return st; }) : idbLocked().then(function (l) { return { on: l, sqlite: false, users: [], me: null }; }); }); },
+    login: function (a) { return SQL.ready.then(function () { return sq('login', a); }).then(function (r) { setTok(r.tok); if (!lanTok()) ME = r.me; return dropCopy().then(function () { return { me: r.me, tok: lanTok() ? r.tok : undefined }; }); }); },
+    recover: function (a) { return SQL.ready.then(function () { return sq('recover', a); }).then(function (r) { setTok(r.tok); if (!lanTok()) ME = r.me; return dropCopy().then(function () { return { me: r.me, tok: lanTok() ? r.tok : undefined }; }); }); },
+    setupOwner: function (a) { return SQL.ready.then(function () { return sq('setupOwner', a); }).then(function (r) { setTok(r.tok); if (!lanTok()) ME = r.me; return dropCopy().then(function () { return { me: r.me, recovery: r.recovery, tok: lanTok() ? r.tok : undefined }; }); }); },
+    logout: function () { var t = tok(); setTok(''); if (!lanTok()) ME = null; return SQL.ready.then(function () { return SQL.on ? SQL.call('logout', { tok: t }) : true; }); },
+    can: function (a) { return AREADY().then(function () { return LOGINS ? sq('can', a || {}) : true; }); },
+    users: function (a) { return sq('users', a || {}); },
+    addUser: function (a) { return sq('addUser', a || {}); },
+    setUser: function (a) { return sq('setUser', a || {}); },
+    changePw: function (a) { return sq('changePw', a || {}); },
+    setRole: function (a) { return sq('setRole', a || {}); },
+    engine: function () { return SQL.ready.then(function () { var on = SQL.on; return on ? sq('files', {}).then(function (f) { return { sqlite: true, files: f }; }) : { sqlite: false, error: SQL.error || '' }; }); },
+    docsOf: function (a) { return SQL.ready.then(function () { var on = SQL.on; if (on) return sq('docsOf', a); return E.all('doc'); }); },
+    /* Stage 3: count + oldest save time, and the documents with no business id, without reading every document (null = not on SQLite) */
+    docStat: function () { return AREADY().then(function () { return SQL.on ? sq('docStat', {}).catch(function (e) { return fallback(e, function () { return null; }); }) : null; }); },
+    noBiz: function () { return AREADY().then(function () { return SQL.on ? sq('noBiz', {}).catch(function (e) { return fallback(e, function () { return null; }); }) : null; }); },
+    /* Stage 3: documents of the open years only (closed years stay in their files, see sqlcore docsFrom); without SQLite every document, no cut */
+    docsFrom: function (a) {
+      return AREADY().then(function () {
+        if (!SQL.on) return E.all('doc').then(function (l) { return { docs: l, cut: {} }; });
+        return sq('docsFrom', a || {}).catch(function (e) { return fallback(e, function () { return plain(idbAll)('doc').then(function (l) { return { docs: l, cut: {} }; }); }); });
+      });
+    },
+    /* ---------- Stage 4: copies of the data files ----------
+       snapshot({ have }) -> { at, logins, cipher, files: [{ name, stamp, size, bytes | same }] }; restoreFiles({ files }) replaces
+       the data with a backup's files. The Windows program answers in JSON, so the bytes travel there as base64. */
+    snapshot: function (a) {
+      return AREADY().then(function () {
+        if (!SQL.on) throw new Error('nosql');
+        if (SQL.desk && a && a.auto) return { desk: true, files: [] };   /* the program makes its own daily copies (sqlhome.js) */
+        return sq('snapshot', { have: a && a.have || {} }).then(function (r) {
+          if (SQL.desk) (r.files || []).forEach(function (f) { if (f.b64 != null) { f.bytes = unb64(f.b64); delete f.b64; } });
+          return r;
+        });
+      });
+    },
+    restoreFiles: function (a) {
+      var files = (a && a.files || []).map(function (f) { return SQL.desk ? { name: f.name, b64: b64(f.bytes) } : { name: f.name, bytes: f.bytes }; });
+      return SQL.ready.then(function () { if (!SQL.on) throw new Error('nosql'); return sq('restore', { files: files, note: a && a.note || '' }); }).then(afterRestore);
+    },
+    /* the Windows program's own daily copies: { op: 'bkDays' | 'bkRestoreDay' | 'bkNow', day } (null in a browser) */
+    deskBackup: function (a) { return SQL.ready.then(function () { if (!SQL.desk || !SQL.on) return null; return sq(a.op, a).then(function (r) { return a.op === 'bkRestoreDay' ? afterRestore(r) : r; }); }); },
     /* ERP Round 1, A-1: an edit history entry, sealed onto the chain */
     logAdd: function (a) { return logAdd(Array.isArray(a.value) ? a.value : [a.value]); },
     /* "Check edit history": walks the chain and says where it breaks */
@@ -249,6 +486,7 @@
       var start = Date.now();
       return fget('dir').then(function (h) {
         if (!h) return 'off';
+        if (LOGINS) return 'off';   /* logins on: no readable backup file; the locked .sqlite files are copied instead (Stage 4) */
         return h.queryPermission({ mode: 'readwrite' }).then(function (p) {
           if (p !== 'granted') return 'ask';
           return OPS.exportAll().then(function (data) {
@@ -258,7 +496,7 @@
               .then(function (dd) { return dd.getFileHandle(AF_FILE, { create: true }); }).then(function (fh) { return fh.createWritable(); })
               .then(function (w) { return w.write(JSON.stringify(b, null, 1)).then(function () { return w.close(); }); });
           }).then(function () {
-            return tx('meta', 'readwrite', function (s) { s.put({ id: 'lastBackup', v: Date.now(), updated: Date.now() }); });
+            return E.put('meta', [{ id: 'lastBackup', v: Date.now(), updated: Date.now() }]);
           }).then(function () {
             return fget('dirty').then(function (d) { if (!d || d <= start) return fput('dirty', null); });   /* a change during the write: keep it for the next one */
           }).then(function () { return fput('last', Date.now()); }).then(function () { return 'ok'; });
@@ -313,6 +551,6 @@
     if (!fn) return reply(false, 'Unknown operation');
     Promise.resolve().then(function () { return fn(m.args || {}); }).then(function (v) { reply(true, v); }, function (err) { reply(false, err); });
   });
-  db().then(function () { window.parent.postMessage({ ns: 'vault', ready: true }, '*'); },
+  db().then(function () { return SQL.ready; }).then(function () { window.parent.postMessage({ ns: 'vault', ready: true }, '*'); },
     function () { window.parent.postMessage({ ns: 'vault', ready: false }, '*'); });
 })();
