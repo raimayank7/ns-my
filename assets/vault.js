@@ -261,6 +261,9 @@
     return areadyP;
   }
   /* the engine every command below uses: SQLite when it is there, else the old database; every save goes into both until logins are on */
+  /* Speed (27 Nov 2026): the old browser database is only a safety copy, so a save no longer waits for it. SQLite has the data when the save is answered; a failed
+     safety write marks the old database as behind (the next start brings it up to date from SQLite). */
+  function safe(p) { Promise.resolve(p).catch(function () { return behind().catch(function () {}); }); }
   function behind() { return idbPut('meta', [{ id: 'sqlBehind', v: Date.now(), updated: Date.now() }]); }
   function fallback(e, fn) { if (e && AUTHERR.test(e.message || '')) throw e; return fn(); }
   function plain(fn) { return function () { var args = arguments; return idbLocked().then(function (l) { return l ? lockedErr() : fn.apply(null, args); }); }; }
@@ -270,20 +273,20 @@
     put: function (s, list) {
       return AREADY().then(function () {
         if (!SQL.on) return plain(idbPut)(s, list).then(function (n) { return !SQL.has ? n : behind().then(function () { return n; }); });
-        return sq('put', { store: s, rows: list }).then(function () { return LOGINS ? list.length : idbPut(s, list); },
+        return sq('put', { store: s, rows: list }).then(function () { return LOGINS ? list.length : (safe(idbPut(s, list)), list.length); },
           function (e) { return fallback(e, function () { return idbPut(s, list).then(function (n) { return behind().then(function () { return n; }); }); }); });
       });
     },
     del: function (s, id) {
       return AREADY().then(function () {
         if (!SQL.on) return plain(idbDel)(s, id).then(function () { return SQL.has ? behind() : null; });
-        return sq('del', { store: s, id: id }).then(function () { return LOGINS ? null : idbDel(s, id); }, function (e) { return fallback(e, function () { return idbDel(s, id).then(behind); }); });
+        return sq('del', { store: s, id: id }).then(function () { return LOGINS ? null : (safe(idbDel(s, id)), null); }, function (e) { return fallback(e, function () { return idbDel(s, id).then(behind); }); });
       });
     },
     clear: function (s) {
       return AREADY().then(function () {
         if (!SQL.on) return plain(idbClear)(s).then(function () { return SQL.has ? behind() : null; });
-        return sq('clear', { store: s }).then(function () { return LOGINS ? null : idbClear(s); }, function (e) { return fallback(e, function () { return idbClear(s).then(behind); }); });
+        return sq('clear', { store: s }).then(function () { return LOGINS ? null : (safe(idbClear(s)), null); }, function (e) { return fallback(e, function () { return idbClear(s).then(behind); }); });
       });
     }
   };

@@ -102,12 +102,14 @@
         if (!by.has(f)) by.set(f, []);
         by.get(f).push(r);
       });
+      if (moves.length) c.run("INSERT OR REPLACE INTO info VALUES('mvpending', '1')");   /* Speed (27 Nov 2026): start-up repair only runs when a move was left unfinished */
       by.forEach(function (l, f) {
         var db = open(f);
         tx(db, function () { db.many('INSERT OR REPLACE INTO doc VALUES(?,?,?,?,?,?,?,?,?)', l.map(function (r) { return [String(r.id), String(r.type || ''), String(r.kind || ''), String(r.date || ''), String(r.no || ''), party(r), +r.total || 0, r.updated || 0, JSON.stringify(r)]; })); });
       });
       tx(c, function () { var all = []; by.forEach(function (l, f) { l.forEach(function (r) { all.push([String(r.id), f]); }); }); c.many('INSERT OR REPLACE INTO docloc VALUES(?,?)', all); });
       moves.forEach(function (m) { open(m[0]).run('DELETE FROM doc WHERE id=?', [m[1]]); });
+      if (moves.length) c.run("DELETE FROM info WHERE k='mvpending'");
       return rows.length;
     }
     function del(store, id) {
@@ -189,12 +191,15 @@
     /* a document saved into a new file is removed from the old file after the new one is written; if the program stopped in
        between, the old copy is removed here, at the next start */
     function repair() {
+      /* it read every document id of every file at each start (2.7 s at 93,000 documents): now only after an unfinished move, and once for data saved before this rule */
+      if (!C().val("SELECT v FROM info WHERE k='mvpending'") && C().val("SELECT v FROM info WHERE k='repaired1'")) return;
       var map = new Map(C().rows('SELECT id, file FROM docloc'));
       A.names().forEach(function (f) {
         if (!YEARFILE.test(f)) return;
         var db = open(f), stale = db.col('SELECT id FROM doc').filter(function (id) { return map.get(id) !== f; });
         if (stale.length) tx(db, function () { db.many('DELETE FROM doc WHERE id=?', stale.map(function (id) { return [id]; })); });
       });
+      C().run("INSERT OR REPLACE INTO info VALUES('repaired1', '1')"); C().run("DELETE FROM info WHERE k='mvpending'");
     }
     /* ---------- Stage 4: copies of the data files (Backup\Mon..Sun, like Tally and Evershine) ----------
        The files exactly as they lie on disk: once logins are on they stay locked in the copy. A year file gets a fingerprint
