@@ -1,5 +1,5 @@
-const CACHE = 'ns-my-03a92d92b7';
-const SHELL = ["/", "/assets/b-acx.b4dc4b2a54.css", "/assets/b-core.b298f09c54.js", "/assets/b-store.98f1ecd3db.js", "/assets/books.js?v=fefe7d77a5", "/assets/xlsx.js?v=8918149ae7", "/assets/tally.js?v=b0d7bd0579", "/assets/acct.js?v=9fb0bd38a9", "/assets/cashare.js?v=c7cf4d6b68", "/assets/caui.js?v=b89018e749", "/assets/rpcore.js?v=c80649591a", "/assets/pmforms.js?v=bc331e94da", "/vault.html", "/assets/sqlworker.js?v=4ccc8733ed", "/assets/sqlcore.js", "/assets/sqlauth.js", "/assets/vendor/sqlite3mc-2.6.1/sqlite3.mjs", "/assets/vendor/sqlite3mc-2.6.1/sqlite3.wasm"];
+const CACHE = 'ns-my-905403caf9';
+const SHELL = ["/", "/assets/b-acx.a327b3b289.css", "/assets/b-core.b298f09c54.js", "/assets/b-store.05f9852d55.js", "/assets/books.js?v=fefe7d77a5", "/assets/xlsx.js?v=8918149ae7", "/assets/tally.js?v=b0d7bd0579", "/assets/acct.js?v=9fb0bd38a9", "/assets/cashare.js?v=c7cf4d6b68", "/assets/caui.js?v=b89018e749", "/assets/rpcore.js?v=c80649591a", "/assets/pmforms.js?v=bc331e94da", "/vault.html", "/assets/sqlworker.js?v=4ccc8733ed", "/assets/sqlcore.js", "/assets/sqlauth.js", "/assets/vendor/sqlite3mc-2.6.1/sqlite3.mjs", "/assets/vendor/sqlite3mc-2.6.1/sqlite3.wasm"];
 const WARM = [], LGROUPS = [];
 const slow = () => { const c = self.navigator && navigator.connection; return !!c && (c.saveData || /2g/.test(c.effectiveType || '')); };
 const keep = (c, list) => Promise.allSettled(list.map(u => c.match(u).then(m => m || c.add(u))));
